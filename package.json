@@ -1,0 +1,35 @@
+{
+  "name": "bilisum",
+  "version": "0.1.6",
+  "private": true,
+  "type": "module",
+  "description": "Bilibili AI side panel: mind maps, Markdown summaries and subtitles",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build && node scripts/package.mjs",
+    "zip": "wxt zip && node scripts/package.mjs --zip",
+    "check": "wxt prepare && svelte-check --tsconfig ./tsconfig.json",
+    "test": "tsx --test tests/*.test.ts",
+    "postinstall": "wxt prepare",
+    "preview": "node scripts/preview.mjs",
+    "format": "prettier --write .",
+    "test:ui": "npm run build && node --test tests/ui.mjs"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.7",
+    "marked": "^16.4.1",
+    "svelte": "5.57.2"
+  },
+  "devDependencies": {
+    "@tsconfig/svelte": "^5.0.4",
+    "@types/node": "^22.0.0",
+    "@wxt-dev/module-svelte": "2.0.5",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.9",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte-check": "^4.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.0",
+    "wxt": "0.21.4"
+  }
+}
