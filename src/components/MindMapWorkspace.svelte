@@ -3,7 +3,7 @@
   import MindMap from './MindMap.svelte';
   import MindMapOutline from './MindMapOutline.svelte';
   import MindMapOverview from './MindMapOverview.svelte';
-  import type { MindMapNode } from '../lib/types';
+  import type { Appearance, MindMapNode } from '../lib/types';
   import type { MapLayoutMode } from '../lib/mindmap';
 
   let {
@@ -12,7 +12,7 @@
     ondownloadoutline,
   }: {
     tree: MindMapNode;
-    theme?: 'light' | 'dark';
+    theme?: Appearance;
     ondownloadoutline: () => void;
   } = $props();
   let view = $state<'map' | 'outline' | 'overview'>('map');
@@ -141,9 +141,11 @@
       {selected
         ? '当前主题：' + selected.title
         : tree.children.length
-          ? '先看主题，再从上方选择分支查看要点。'
+          ? '点击父节点逐层展开，再次点击收起。'
           : '当前结果只有中心主题，没有下级条目。'}
-      {depth < 6 && tree.children.length ? '“+” 表示未展开条目。' : ''}
+      {shownTree.children.length
+        ? '“+” 表示未展开条目；切换显示层级会重置展开状态。'
+        : ''}
     </p>
   {:else if view === 'outline'}
     <p class="analysis-caption">

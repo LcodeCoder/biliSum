@@ -37,9 +37,9 @@ const server = createServer(async (request, response) => {
           .toString()
           .replace(
             '<head>',
-            '<head><script src="/fixture.js"></script><style>body{background:#e8eef6!important}#app{max-width:' +
+            '<head><script src="/fixture.js"></script><style>body{background:var(--bg)!important}#app{max-width:' +
               width +
-              'px;margin:0 auto;box-shadow:0 0 0 1px #cddbea}</style>',
+              'px;margin:0 auto;box-shadow:0 0 0 1px var(--line)}</style>',
           ),
       );
     }

@@ -1,9 +1,9 @@
 {
   "name": "bilisum",
-  "version": "0.1.6",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
-  "description": "Bilibili AI side panel: mind maps, Markdown summaries and subtitles",
+  "description": "Bilibili AI side panel: mind maps, Markdown/HTML summaries and subtitles",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build && node scripts/package.mjs",

@@ -55,12 +55,23 @@ export interface SummaryResult extends ResultMeta {
 export interface MapResult extends ResultMeta {
   tree: MindMapNode;
 }
+export interface HtmlDocument {
+  title: string;
+  conclusion: string;
+  sections: { title: string; markdown: string }[];
+  tree: MindMapNode | null;
+}
+export interface HtmlResult extends ResultMeta {
+  document: HtmlDocument;
+}
 export interface SavedResults {
   sourceHash: string;
   summary: SummaryResult | null;
   map: MapResult | null;
+  html?: HtmlResult | null;
 }
-export type Theme = 'system' | 'light' | 'dark';
+export type Appearance = 'light' | 'eye' | 'dark';
+export type Theme = 'system' | Appearance;
 export interface Settings {
   apiBaseUrl: string;
   apiKey: string;
@@ -68,7 +79,7 @@ export interface Settings {
   theme: Theme;
   detailLevel: DetailLevel;
 }
-export type GenerationKind = 'map' | 'summary';
+export type GenerationKind = 'map' | 'summary' | 'html';
 export interface ApiOptions {
   signal?: AbortSignal;
   fetcher?: typeof fetch;

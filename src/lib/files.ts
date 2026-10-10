@@ -1,5 +1,5 @@
 import { layoutMindMap, renderMindMapSvg } from './mindmap';
-import type { MindMapNode } from './types';
+import type { Appearance, MindMapNode } from './types';
 
 export function safeFilename(input: string): string {
   let name = input
@@ -36,11 +36,14 @@ export function downloadText(
 export async function downloadMapPng(
   tree: MindMapNode,
   filename: string,
+  appearance: Appearance = 'light',
 ): Promise<void> {
   const layout = layoutMindMap(tree);
   const image = new Image();
   const url = URL.createObjectURL(
-    new Blob([renderMindMapSvg(tree)], { type: 'image/svg+xml;charset=utf-8' }),
+    new Blob([renderMindMapSvg(tree, appearance)], {
+      type: 'image/svg+xml;charset=utf-8',
+    }),
   );
   try {
     await new Promise<void>((resolve, reject) => {

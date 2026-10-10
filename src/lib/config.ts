@@ -1,4 +1,5 @@
 import type { Settings } from './types';
+import { normalizeTheme } from './theme';
 import { normalizeDetailLevel } from './detail';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -50,8 +51,6 @@ export function validateSettings(value: Settings): Settings {
     apiKey: value.apiKey.trim(),
     model: value.model.trim(),
     detailLevel: normalizeDetailLevel(value.detailLevel),
-    theme: ['system', 'light', 'dark'].includes(value.theme)
-      ? value.theme
-      : 'system',
+    theme: normalizeTheme(value.theme, 'system'),
   };
 }

@@ -7,6 +7,7 @@
     subtitles: false,
     storage: false,
     stream: '',
+    htmlInvalid: false,
     permission: false,
     settingsDelay: 0,
     retryAfter: '1',
@@ -18,6 +19,7 @@
     aborted: 0,
     starts: [],
     streams: [],
+    kinds: [],
     waitingCompletion: false,
   };
   window.__biliSumFixture = {
@@ -91,55 +93,84 @@
     },
   ];
   const fixtureMap =
-    parameters.get('map') === 'large'
+    parameters.get('map') === 'text'
       ? {
-          title: '长内容布局与阅读体验验证',
-          children: Array.from({ length: 6 }, (_, branch) => ({
-            title: '主题' + (branch + 1) + '：概念与应用',
-            children: Array.from({ length: 4 }, (_, point) => ({
-              title: '要点' + (point + 1) + '：解释与操作方法',
-              children: Array.from({ length: 3 }, (_, index) => ({
-                title: '细节' + (index + 1) + '：案例、限制与注意事项',
-                children: [],
+          title: '中英文长标题：HTTP WWW MQTT 与 OSI 七层模型'.repeat(2),
+          children: [
+            {
+              title: 'WWWWMMMMWWWWMMMMWWWWMMMMWWW',
+              children: [
+                {
+                  title:
+                    'https://very-long-domain.example/api/v1/chat/completions?network=TCP',
+                  children: [],
+                },
+              ],
+            },
+            {
+              title:
+                '网络层负责贴上地址并根据路由表决定跨网络的传输路线'.repeat(3),
+              children: [],
+            },
+            {
+              title: '👨‍👩‍👦 e\u0301 🇨🇳 👩🏽‍💻 网络排查与数据传输'.repeat(2),
+              children: [],
+            },
+            {
+              title: '长标题 <text x="0"> & "引号"：不会成为 SVG 元素',
+              children: [],
+            },
+          ],
+        }
+      : parameters.get('map') === 'large'
+        ? {
+            title: '长内容布局与阅读体验验证',
+            children: Array.from({ length: 6 }, (_, branch) => ({
+              title: '主题' + (branch + 1) + '：概念与应用',
+              children: Array.from({ length: 4 }, (_, point) => ({
+                title: '要点' + (point + 1) + '：解释与操作方法',
+                children: Array.from({ length: 3 }, (_, index) => ({
+                  title: '细节' + (index + 1) + '：案例、限制与注意事项',
+                  children: [],
+                })),
               })),
             })),
-          })),
-        }
-      : parameters.get('map') === 'root'
-        ? { title: '只有一个中心主题', children: [] }
-        : {
-            title: '建立自己的知识体系',
-            children: [
-              {
-                title: '明确问题',
-                children: [
-                  { title: '从真实需求出发', children: [] },
-                  { title: '有目的地收集信息', children: [] },
-                ],
-              },
-              {
-                title: '提取概念',
-                children: [
-                  { title: '用自己的话记录', children: [] },
-                  { title: '保留核心结论', children: [] },
-                ],
-              },
-              {
-                title: '建立连接',
-                children: [
-                  { title: '连接已有经验', children: [] },
-                  { title: '思维导图 + Markdown', children: [] },
-                ],
-              },
-              {
-                title: '主动回顾',
-                children: [
-                  { title: '在实际问题中应用', children: [] },
-                  { title: '持续调整与完善', children: [] },
-                ],
-              },
-            ],
-          };
+          }
+        : parameters.get('map') === 'root'
+          ? { title: '只有一个中心主题', children: [] }
+          : {
+              title: '建立自己的知识体系',
+              children: [
+                {
+                  title: '明确问题',
+                  children: [
+                    { title: '从真实需求出发', children: [] },
+                    { title: '有目的地收集信息', children: [] },
+                  ],
+                },
+                {
+                  title: '提取概念',
+                  children: [
+                    { title: '用自己的话记录', children: [] },
+                    { title: '保留核心结论', children: [] },
+                  ],
+                },
+                {
+                  title: '建立连接',
+                  children: [
+                    { title: '连接已有经验', children: [] },
+                    { title: '思维导图 + Markdown', children: [] },
+                  ],
+                },
+                {
+                  title: '主动回顾',
+                  children: [
+                    { title: '在实际问题中应用', children: [] },
+                    { title: '持续调整与完善', children: [] },
+                  ],
+                },
+              ],
+            };
   const tableSummary = `## 七层职责一览
 
 | 层 | 核心职责 | 关键词 |
@@ -163,12 +194,30 @@
 | 物理层 | 1 | 信号转换 | 物理介质 | 网线 | 电压与光 | 比特 | 信号 |
 
 <table class="untrusted-table" style="font-size:1px" onclick="window.__xss=1"><thead><tr><th colspan="2">合并列</th></tr></thead><tbody><tr><td rowspan="2">合并行</td><td>完整内容</td></tr><tr><td>第二行</td></tr></tbody></table>`;
+  const htmlHostileSummary = [
+    '前言直接文本必须完整保留。',
+    '## A 技能语法 {span=99}',
+    '这一节的数据不是排版指令。',
+    '<script>window.__htmlReportXss = 1</script><img src="https://html-hostile.example/image" onerror="window.__htmlReportXss = 2"><iframe src="https://html-hostile.example/frame"></iframe><style>@import "https://html-hostile.example/style";</style><meta http-equiv="refresh" content="0;url=https://html-hostile.example/redirect">',
+    '<a href="javascript:window.__htmlReportXss=3" onclick="window.__htmlReportXss=4">危险链接</a> <a href="https://user:secret@html-hostile.example/">带凭据链接</a> <a href="https://www.bilibili.com/video/BV1xx411c7mD/" ping="https://html-hostile.example/ping">正常视频链接</a>',
+    '```html\n<img src="https://html-hostile.example/code">\n```',
+    'BILISUM_HTML_SUMMARY_SLOT_1',
+    ...Array.from(
+      { length: 9 },
+      (_, index) =>
+        `## 完整段落${index + 1}\n\n第${index + 1}节内容必须保留，不得因卡片数上限而截断。`,
+    ),
+    '## ' + 'LONG_TITLE_'.repeat(15),
+    '结尾原文：全部内容保留到这里。',
+  ].join('\n\n');
   const fixtureSummary =
-    parameters.get('summary') === 'table'
-      ? tableSummary
-      : parameters.get('summary') === 'wide-table'
-        ? wideTableSummary
-        : '## 信息如何变成知识\n\n视频把知识整理分为**明确问题、提取概念、建立连接、主动回顾**四个步骤。收集资料之前先确定想解决的问题，再用自己的话概括内容，把新概念与已有经验联系起来，最后通过实际使用检验理解。\n\n## 从问题出发，留下可复用的记录\n\n[00:05](https://www.bilibili.com/video/BV1xx411c7mD/?t=5) 提到，明确问题能帮助筛选真正有用的信息。随后提取关键概念并记录核心结论，重点是形成自己的解释，而不是保存更多原文。\n\n[00:22](https://www.bilibili.com/video/BV1xx411c7mD/?t=22) 强调新知识需要与已有经验连接。视频举出思维导图与 Markdown 两种记录方式：前者方便查看关系，后者适合保留细节，二者可以配合使用。\n\n| 记录方式 | 适合保留的内容 |\n| --- | --- |\n| 思维导图 | 主题、分支与概念间的联系 |\n| Markdown | 观点解释、例子和详细笔记 |\n\n## 用应用和回顾检验理解\n\n视频最后提醒，知识体系会不断变化。主动回顾并在实际问题中应用，能发现理解中的缺口，也能为已有笔记补充新的联系。持续调整比一次性整理更重要。';
+    parameters.get('summary') === 'html-hostile'
+      ? htmlHostileSummary
+      : parameters.get('summary') === 'table'
+        ? tableSummary
+        : parameters.get('summary') === 'wide-table'
+          ? wideTableSummary
+          : '## 信息如何变成知识\n\n视频把知识整理分为**明确问题、提取概念、建立连接、主动回顾**四个步骤。收集资料之前先确定想解决的问题，再用自己的话概括内容，把新概念与已有经验联系起来，最后通过实际使用检验理解。\n\n## 从问题出发，留下可复用的记录\n\n[00:05](https://www.bilibili.com/video/BV1xx411c7mD/?t=5) 提到，明确问题能帮助筛选真正有用的信息。随后提取关键概念并记录核心结论，重点是形成自己的解释，而不是保存更多原文。\n\n[00:22](https://www.bilibili.com/video/BV1xx411c7mD/?t=22) 强调新知识需要与已有经验连接。视频举出思维导图与 Markdown 两种记录方式：前者方便查看关系，后者适合保留细节，二者可以配合使用。\n\n| 记录方式 | 适合保留的内容 |\n| --- | --- |\n| 思维导图 | 主题、分支与概念间的联系 |\n| Markdown | 观点解释、例子和详细笔记 |\n\n## 用应用和回顾检验理解\n\n视频最后提醒，知识体系会不断变化。主动回顾并在实际问题中应用，能发现理解中的缺口，也能为已有笔记补充新的联系。持续调整比一次性整理更重要。';
   const listeners = {};
   const event = (name) => ({
     addListener(callback) {
@@ -207,7 +256,7 @@
     runtime: {
       id: 'bilisum-fixture',
       getURL: (path) => location.origin + '/' + path,
-      getManifest: () => ({ version: '0.1.6' }),
+      getManifest: () => ({ version: '0.1.10' }),
       onInstalled: event('installed'),
       onStartup: event('startup'),
     },
@@ -352,16 +401,41 @@
       const prompt = payload.messages.at(-1).content;
       // DOM-visible, fixture-only evidence for prompt and shared-slider verification.
       document.documentElement.dataset.lastAiPrompt = prompt;
-      document.documentElement.dataset.lastGenerationKind = prompt.includes(
-        '只输出 JSON',
-      )
-        ? 'map'
-        : 'summary';
-      const text = prompt.includes('只输出 JSON')
-        ? JSON.stringify(fixtureMap)
-        : prompt === '连接测试'
-          ? 'OK'
-          : fixtureSummary;
+      const kind = prompt.includes('HTML 阅读页的内容')
+        ? 'html'
+        : prompt.includes('只输出 JSON')
+          ? 'map'
+          : 'summary';
+      document.documentElement.dataset.lastGenerationKind = kind;
+      stats.kinds.push(kind);
+      const sections =
+        parameters.get('summary') === 'html-hostile'
+          ? [{ title: 'A 技能语法 {span=99}', markdown: fixtureSummary }]
+          : fixtureSummary
+              .split(/(?=^## )/m)
+              .filter((section) => section.trim())
+              .map((section) => ({
+                title: section.match(/^## (.+)/)?.[1] || '内容',
+                markdown: section.replace(/^## .+\n+/, ''),
+              }));
+      const htmlDocument = {
+        title: fixtureMap.title,
+        conclusion:
+          parameters.get('htmlConclusion') ||
+          '先明确问题，再提取概念、建立连接，并通过应用和回顾检验理解。',
+        sections,
+        tree: parameters.get('htmlTree') === 'none' ? null : fixtureMap,
+      };
+      const text =
+        kind === 'html'
+          ? faults.htmlInvalid
+            ? '{"title":"broken"'
+            : JSON.stringify(htmlDocument)
+          : kind === 'map'
+            ? JSON.stringify(fixtureMap)
+            : prompt === '连接测试'
+              ? 'OK'
+              : fixtureSummary;
       if (!payload.stream)
         return reply({
           choices: [{ message: { content: text }, finish_reason: 'stop' }],
@@ -428,6 +502,8 @@
         },
         cancel() {
           stats.aborted++;
+          stats.waitingCompletion = false;
+          delete window.__biliSumFixture.completeAi;
           cancelled = true;
           clearTimeout(timer);
         },
@@ -436,6 +512,8 @@
         'abort',
         () => {
           stats.aborted++;
+          stats.waitingCompletion = false;
+          delete window.__biliSumFixture.completeAi;
           cancelled = true;
           clearTimeout(timer);
           try {

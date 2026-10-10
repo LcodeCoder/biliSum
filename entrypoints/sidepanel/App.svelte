@@ -4,6 +4,11 @@
   import Icon from '../../src/components/Icon.svelte';
   import MindMapWorkspace from '../../src/components/MindMapWorkspace.svelte';
   import Subtitles from '../../src/components/Subtitles.svelte';
+  import HtmlReport from '../../src/components/HtmlReport.svelte';
+  import type {
+    HtmlReportLayout,
+    HtmlReportTheme,
+  } from '../../src/lib/html-report';
   import SettingsPane from '../../src/components/Settings.svelte';
   import { DEFAULT_SETTINGS } from '../../src/lib/config';
   import { detailProfile, normalizeDetailLevel } from '../../src/lib/detail';
@@ -14,7 +19,11 @@
     resolveVideo,
     selectSubtitle,
   } from '../../src/lib/bilibili';
-  import { generateMindMap, generateSummary } from '../../src/lib/ai';
+  import {
+    generateHtmlDocument,
+    generateMindMap,
+    generateSummary,
+  } from '../../src/lib/ai';
   import {
     aiRuntime,
     loadSettings,
@@ -42,7 +51,9 @@
   import { renderMarkdown, summaryDocument } from '../../src/lib/markdown';
   import { errorMessage } from '../../src/lib/request';
   import type {
+    Appearance,
     GenerationKind,
+    HtmlResult,
     MapResult,
     Settings,
     SubtitleTrack,
@@ -51,7 +62,9 @@
     VideoInfo,
   } from '../../src/lib/types';
 
-  let page = $state<'map' | 'summary' | 'subtitles'>('map');
+  let page = $state<'map' | 'summary' | 'html' | 'subtitles'>('map');
+  let htmlLayout = $state<HtmlReportLayout>('sheet');
+  let htmlTheme = $state<HtmlReportTheme>('paper');
   let settings = $state<Settings>({ ...DEFAULT_SETTINGS });
   let showSettings = $state(false);
   let setupOpen = $state(true);
@@ -86,6 +99,7 @@
   let retryKind = $state<GenerationKind | null>(null);
   const shownSummary = $derived(draft ?? summary);
   let map = $state<MapResult | null>(null);
+  let htmlResult = $state<HtmlResult | null>(null);
   let rawMarkdown = $state(false);
   const sourceChunks = $derived(
     transcript ? chunkTranscript(transcript).length : 0,
@@ -117,7 +131,11 @@
   });
 
   $effect(() => {
-    if (!map || page !== 'map' || showSettings) focusMode = false;
+    if (
+      showSettings ||
+      !((page === 'map' && map) || (page === 'html' && htmlResult))
+    )
+      focusMode = false;
   });
 
   function exitFocus(event: KeyboardEvent) {
@@ -141,7 +159,7 @@
         if (!disposed) error = '保存外观或细腻程度失败，请重试。';
       });
   }
-  function changeTheme(theme: 'light' | 'dark') {
+  function changeTheme(theme: Appearance) {
     settings.theme = theme;
     persistPreferences();
   }
@@ -161,6 +179,7 @@
   }
   function stopGeneration(announce = true) {
     if (announce) preserveDraft();
+    const stoppedKind = busy;
     const wasBusy = !!busy;
     generationSerial++;
     generationController?.abort();
@@ -170,7 +189,11 @@
     streamDraft = '';
     latestDraft = '';
     if (announce && wasBusy)
-      notify(draft ? '生成已停止，未完成草稿可复制或下载' : '生成已停止');
+      notify(
+        stoppedKind === 'summary' && draft
+          ? '生成已停止，未完成草稿可复制或下载'
+          : '生成已停止',
+      );
   }
   function startSource(preserve = false) {
     stopGeneration(preserve);
@@ -185,6 +208,7 @@
       transcript = null;
       summary = null;
       map = null;
+      htmlResult = null;
       draft = null;
       setupOpen = true;
     }
@@ -206,6 +230,7 @@
     if (oldHash !== newHash) {
       summary = null;
       map = null;
+      htmlResult = null;
       draft = null;
       setupOpen = true;
     }
@@ -226,7 +251,9 @@
       if (isCurrent(serial) && saved?.sourceHash === hash) {
         summary ??= saved.summary;
         map ??= saved.map;
-        if (map && page === 'map') setupOpen = false;
+        htmlResult ??= saved.html ?? null;
+        if ((map && page === 'map') || (htmlResult && page === 'html'))
+          setupOpen = false;
       }
     } catch {
       /* A cache read does not block subtitle use. */
@@ -452,6 +479,16 @@
         if (!current()) return;
         map = { ...meta, tree };
         setupOpen = false;
+      } else if (kind === 'html') {
+        const document = await generateHtmlDocument(
+          currentVideo,
+          currentTranscript,
+          currentSettings,
+          options,
+        );
+        if (!current()) return;
+        htmlResult = { ...meta, document };
+        setupOpen = false;
       } else {
         const markdown = await generateSummary(
           currentVideo,
@@ -470,6 +507,7 @@
             sourceHash,
             summary: $state.snapshot(summary),
             map: $state.snapshot(map),
+            html: $state.snapshot(htmlResult),
           },
           kind,
         );
@@ -478,7 +516,13 @@
         return;
       }
       if (current())
-        notify(kind === 'map' ? '思维导图已生成' : 'Markdown 总结已生成');
+        notify(
+          kind === 'map'
+            ? '思维导图已生成'
+            : kind === 'html'
+              ? 'HTML 阅读页已生成'
+              : 'Markdown 总结已生成',
+        );
     } catch (cause) {
       if (current()) {
         preserveDraft();
@@ -487,7 +531,9 @@
           errorMessage(cause) +
           (kind === 'summary' && draft
             ? ' 已保留未完成草稿，可复制或下载。'
-            : '');
+            : kind === 'html' && htmlResult
+              ? ' 已保留上次完整阅读页。'
+              : '');
       }
     } finally {
       if (serial === generationSerial && !disposed) {
@@ -542,11 +588,11 @@
       () =>
         format === 'svg'
           ? downloadText(
-              renderMindMapSvg(tree),
+              renderMindMapSvg(tree, appearance),
               filename('-思维导图.svg'),
               'image/svg+xml;charset=utf-8',
             )
-          : downloadMapPng(tree, filename('-思维导图.png')),
+          : downloadMapPng(tree, filename('-思维导图.png'), appearance),
       '已开始下载思维导图',
     );
   }
@@ -731,7 +777,15 @@
           onclick={() => changeTheme('light')}
           aria-pressed={appearance === 'light'}
           aria-label="浅色模式"
-          title="浅色模式"><Icon name="sun" size={17} /></button
+          title="浅色模式 · 暖纸色"><Icon name="sun" size={17} /></button
+        >
+        <button
+          class="icon-button small"
+          class:active={appearance === 'eye'}
+          onclick={() => changeTheme('eye')}
+          aria-pressed={appearance === 'eye'}
+          aria-label="护眼模式"
+          title="护眼模式 · 柔和暖色"><Icon name="eye" size={17} /></button
         >
         <button
           class="icon-button small"
@@ -739,7 +793,7 @@
           onclick={() => changeTheme('dark')}
           aria-pressed={appearance === 'dark'}
           aria-label="深色模式"
-          title="深色模式"><Icon name="moon" size={17} /></button
+          title="深色模式 · 暖棕灰"><Icon name="moon" size={17} /></button
         >
       </div>
       <button
@@ -857,7 +911,7 @@
           value={settings.detailLevel}
           disabled={!!busy}
           aria-valuetext={detail.label}
-          title="用于下一次生成的思维导图和 Markdown 总结"
+          title="用于下一次生成的思维导图、Markdown 总结和 HTML 阅读页"
           style:--range-progress={(settings.detailLevel - 1) * 25 + '%'}
           oninput={(event) => changeDetail(event.currentTarget.value)}
           onchange={persistPreferences}
@@ -883,6 +937,16 @@
             disabled={!canGenerate}
             aria-label="生成 Markdown 总结"
             title="生成 Markdown 总结"><Icon name="file" size={21} /></button
+          >
+        </div>
+        <div class="generation-card">
+          <strong>HTML</strong>
+          <button
+            class="generate-button"
+            onclick={() => generate('html')}
+            disabled={!canGenerate}
+            aria-label="生成 HTML 阅读页"
+            title="AI 生成 HTML 阅读页"><Icon name="code" size={21} /></button
           >
         </div>
       </div>
@@ -935,6 +999,18 @@
           ><Icon name="file" size={20} /><span>Markdown</span></button
         >
       </div>
+      <div class="nav-item" class:selected={page === 'html'}>
+        <button
+          class="nav-button"
+          aria-label="HTML 阅读页页面"
+          aria-pressed={page === 'html'}
+          title="HTML 阅读页，可离线下载"
+          onclick={() => {
+            page = 'html';
+            if (htmlResult) setupOpen = false;
+          }}><Icon name="code" size={20} /><span>HTML</span></button
+        >
+      </div>
       <div class="nav-item" class:selected={page === 'subtitles'}>
         <button
           class="nav-button"
@@ -961,7 +1037,11 @@
           title="关闭提示"><Icon name="x" size={14} /></button
         >
       </div>{/if}
-    <main class="panel-content" class:map-content={page === 'map'}>
+    <main
+      class="panel-content"
+      class:map-content={page === 'map'}
+      class:html-content={page === 'html'}
+    >
       {#if page === 'map'}
         <section class="map-pane" aria-label="思维导图">
           <div class="pane-heading">
@@ -1111,6 +1191,26 @@
             </div>
           {/if}
         </section>
+      {:else if page === 'html'}
+        <HtmlReport
+          {video}
+          result={htmlResult}
+          {appearance}
+          layout={htmlLayout}
+          theme={htmlTheme}
+          filename={filename('-阅读页.html')}
+          busy={busy === 'html'}
+          {canGenerate}
+          {focusMode}
+          ontogglefocus={(button) => {
+            focusButton = button;
+            focusMode = !focusMode;
+          }}
+          onlayout={(value) => (htmlLayout = value)}
+          ontheme={(value) => (htmlTheme = value)}
+          onnotify={notify}
+          ongenerate={() => generate('html')}
+        />
       {:else}
         <Subtitles
           {transcript}

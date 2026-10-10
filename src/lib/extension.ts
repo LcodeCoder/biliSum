@@ -5,6 +5,7 @@ import { abortable, requestSignal } from './request';
 import { createResultCache } from './cache';
 import { createAiRuntime } from './ai-runtime';
 import { normalizeDetailLevel } from './detail';
+import { normalizeTheme } from './theme';
 import type {
   GenerationKind,
   SavedResults,
@@ -45,10 +46,7 @@ export async function loadSettings(): Promise<Settings> {
     apiKey: typeof stored.apiKey === 'string' ? stored.apiKey : '',
     model:
       typeof stored.model === 'string' ? stored.model : DEFAULT_SETTINGS.model,
-    theme:
-      theme && ['system', 'dark', 'light'].includes(theme)
-        ? theme
-        : DEFAULT_SETTINGS.theme,
+    theme: normalizeTheme(theme, DEFAULT_SETTINGS.theme),
     detailLevel: normalizeDetailLevel(
       preferences?.detailLevel ?? stored.detailLevel,
     ),

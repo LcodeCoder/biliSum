@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  expandedMindMapPaths,
   layoutMindMap,
+  renderMindMapLayout,
   mindMapStats,
   mindMapMarkdown,
   searchMindMap,
@@ -65,7 +67,7 @@ test('SVG escapes model strings and all layout boxes remain in bounds', () => {
   }
 });
 
-test('map preview follows the theme while downloads default to a light readable palette', () => {
+test('map renderer supports all appearances and preserves the light default', () => {
   const tree = validateMindMap({
     title: '主题 <x>',
     children: [{ title: '分支' }],
@@ -73,9 +75,12 @@ test('map preview follows the theme while downloads default to a light readable 
   const light = renderMindMapSvg(tree);
   const dark = renderMindMapSvg(tree, 'dark');
   assert.equal(light, renderMindMapSvg(tree, 'light'));
-  assert.ok(light.includes('fill="#f9fbfe"'));
-  assert.ok(dark.includes('fill="#162230"'));
-  assert.ok(dark.includes('fill="#deebf7"'));
+  assert.ok(light.includes('fill="#f5f2ea"'));
+  const eye = renderMindMapSvg(tree, 'eye');
+  assert.ok(eye.includes('fill="#eee7d9"'));
+  assert.ok(eye.includes('fill="#302c24"'));
+  assert.ok(dark.includes('fill="#15130f"'));
+  assert.ok(dark.includes('fill="#ebe5d8"'));
   assert.ok(light.includes('&lt;x&gt;') && dark.includes('&lt;x&gt;'));
   assert.equal(
     (light.match(/<path /g) || []).length,
@@ -244,4 +249,112 @@ test('Markdown outline exports every detail with literal model markup escaped', 
   assert.ok(markdown.includes('  - \\*细节\\* \\| 数据'));
   assert.equal(markdown.match(/^- |^  - /gm)?.length, 2);
   assert.ok(!markdown.includes('<script>'));
+});
+
+test('parents reveal one level with stable paths even when sibling titles match', () => {
+  const tree = validateMindMap({
+    title: '中心',
+    children: [
+      {
+        title: '重复标题',
+        children: [{ title: '要点', children: [{ title: '深入解释' }] }],
+      },
+      { title: '重复标题', children: [{ title: '另一个要点' }] },
+    ],
+  });
+  const original = structuredClone(tree);
+  const paths = expandedMindMapPaths(tree, 1);
+  assert.deepEqual([...paths], ['0']);
+  paths.add('0.0');
+  for (const mode of ['right', 'compact'] as const) {
+    const layout = layoutMindMap(tree, { mode, expandedPaths: paths });
+    assert.equal(layout.nodes.length, 4);
+    assert.equal(
+      layout.nodes.find((node) => node.path === '0.0')?.expanded,
+      true,
+    );
+    assert.equal(
+      layout.nodes.find((node) => node.path === '0.1')?.expanded,
+      false,
+    );
+    assert.equal(
+      layout.nodes.find((node) => node.path === '0.0.0')?.hiddenCount,
+      1,
+    );
+    assert.equal(layout.edges.length, 3);
+    for (const box of layout.nodes) {
+      assert.ok(box.x >= 0 && box.y >= 0);
+      assert.ok(box.x + box.width <= layout.width);
+      assert.ok(box.y + box.height <= layout.height);
+    }
+  }
+  paths.add('0.0.0');
+  assert.equal(layoutMindMap(tree, { expandedPaths: paths }).nodes.length, 5);
+  assert.equal(
+    layoutMindMap(tree, { expandedPaths: new Set() }).nodes.length,
+    1,
+  );
+  assert.equal(
+    layoutMindMap(tree).nodes.length,
+    6,
+    'full exports ignore local expansion',
+  );
+  assert.deepEqual(tree, original);
+  assert.deepEqual([...expandedMindMapPaths(tree, 2)], ['0', '0.0', '0.1']);
+});
+
+test('interactive SVG exposes only parent buttons and safely escapes node labels', () => {
+  const tree = validateMindMap({
+    title: '中心',
+    children: [
+      { title: '\"><script> & 重复标题', children: [{ title: '叶子' }] },
+    ],
+  });
+  const layout = layoutMindMap(tree, {
+    expandedPaths: expandedMindMapPaths(tree, 1),
+  });
+  const svg = renderMindMapLayout(layout, tree.title, 'dark', {
+    interactive: true,
+  });
+  assert.ok(svg.includes('data-map-path="0.0"'));
+  assert.ok(svg.includes('aria-expanded="false"'));
+  assert.ok(
+    svg.includes(
+      'aria-label="展开下一层：&quot;&gt;&lt;script&gt; &amp; 重复标题"',
+    ),
+  );
+  assert.equal((svg.match(/role="button"/g) || []).length, 2);
+  assert.ok(!svg.includes('<script>'));
+  const full = renderMindMapSvg(tree);
+  assert.ok(!full.includes('role="button"') && !full.includes('data-map-path'));
+  assert.equal((full.match(/<g>/g) || []).length, 3);
+});
+
+test('long wide Latin, Chinese and composed Unicode titles wrap without splitting graphemes', () => {
+  const titles = [
+    'WMWMWMWMWMWMWMWMWMWMWMWMWMWMWMWMWM',
+    '中文标题与关键概念'.repeat(8),
+    '👨‍👩‍👦 e\u0301 🇨🇳 👩🏽‍💻 '.repeat(3),
+  ];
+  const tree = validateMindMap({
+    title: titles[0],
+    children: titles.slice(1).map((title) => ({ title })),
+  });
+  const segments = new Intl.Segmenter('zh', { granularity: 'grapheme' });
+  const layout = layoutMindMap(tree);
+  for (const box of layout.nodes) {
+    assert.equal(box.lines.join(''), box.title);
+    assert.deepEqual(
+      box.lines.flatMap((line) =>
+        Array.from(segments.segment(line), ({ segment }) => segment),
+      ),
+      Array.from(segments.segment(box.title), ({ segment }) => segment),
+      'line breaks preserve emoji families, flags, modifiers and combining accents',
+    );
+    assert.ok(box.lines.length > 1);
+    assert.ok(
+      box.height > box.lines.length * 18,
+      'all lines have vertical padding',
+    );
+  }
 });

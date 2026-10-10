@@ -1,14 +1,21 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { on } from 'svelte/events';
   import Icon from './Icon.svelte';
   import {
+    expandedMindMapPaths,
     layoutMindMap,
     renderMindMapLayout,
     type MapLayoutMode,
   } from '../lib/mindmap';
-  import { fitMap, panMap, zoomMap, type MapCamera } from '../lib/map-view';
-  import type { MindMapNode } from '../lib/types';
+  import {
+    fitMap,
+    panMap,
+    revealMapRegion,
+    zoomMap,
+    type MapCamera,
+  } from '../lib/map-view';
+  import type { Appearance, MindMapNode } from '../lib/types';
 
   let {
     tree,
@@ -17,21 +24,64 @@
     maxDepth = 1,
   }: {
     tree: MindMapNode;
-    theme?: 'light' | 'dark';
+    theme?: Appearance;
     mode?: MapLayoutMode;
     maxDepth?: number;
   } = $props();
-  const layout = $derived(layoutMindMap(tree, { mode, maxDepth }));
-  const svg = $derived(renderMindMapLayout(layout, tree.title, theme));
+  const initialExpansion = $derived(expandedMindMapPaths(tree, maxDepth));
+  let customExpansion = $state<{ basis: Set<string>; paths: Set<string> }>();
+  const expandedPaths = $derived(
+    customExpansion?.basis === initialExpansion
+      ? customExpansion.paths
+      : initialExpansion,
+  );
+  const layout = $derived(layoutMindMap(tree, { mode, expandedPaths }));
+  const svg = $derived(
+    renderMindMapLayout(layout, tree.title, theme, { interactive: true }),
+  );
   let viewport = $state<HTMLDivElement>();
   let camera = $state<MapCamera>({ x: 0, y: 0, scale: 1 });
   let moving = $state(false);
   let fitMode = true;
-  let drag: { id: number; x: number; y: number; camera: MapCamera } | null =
-    null;
+  let drag: {
+    id: number;
+    x: number;
+    y: number;
+    camera: MapCamera;
+    moved: boolean;
+    path?: string;
+  } | null = null;
+  let previousBasis: Set<string> | undefined;
+  let previousMode: MapLayoutMode | undefined;
+  let pendingAnchor: { path: string; x: number; y: number } | null = null;
+
+  function nodeElement(target: EventTarget | null): SVGElement | null {
+    if (!(target instanceof Element)) return null;
+    const element = target.closest<SVGElement>('.map-node[role="button"]');
+    return element && viewport?.contains(element) ? element : null;
+  }
+
+  function toggleNode(path: string) {
+    const box = layout.nodes.find((node) => node.path === path);
+    if (!box?.childCount) return;
+    pendingAnchor = {
+      path,
+      x: camera.x + (box.x + box.width / 2) * camera.scale,
+      y: camera.y + (box.y + box.height / 2) * camera.scale,
+    };
+    const paths = new Set(expandedPaths);
+    if (box.expanded) {
+      // Reopening always reveals just the next layer, not an old expanded subtree.
+      for (const candidate of paths)
+        if (candidate === path || candidate.startsWith(path + '.'))
+          paths.delete(candidate);
+    } else paths.add(path);
+    fitMode = false;
+    customExpansion = { basis: initialExpansion, paths };
+  }
 
   function fit() {
-    if (!viewport) return;
+    if (!viewport || !viewport.clientWidth || !viewport.clientHeight) return;
     camera = fitMap(layout, {
       width: viewport.clientWidth,
       height: viewport.clientHeight,
@@ -81,27 +131,30 @@
   }
 
   function start(event: PointerEvent) {
-    if (event.button !== 0 || !viewport || drag) return;
+    if (event.button !== 0 || !event.isPrimary || !viewport || drag) return;
     event.preventDefault();
-    viewport.focus({ preventScroll: true });
-    fitMode = false;
+    const node = nodeElement(event.target);
+    (node ?? viewport).focus({ preventScroll: true });
     drag = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       camera: { ...camera },
+      moved: false,
+      path: node?.dataset.mapPath,
     };
-    moving = true;
     viewport.setPointerCapture(event.pointerId);
   }
 
   function move(event: PointerEvent) {
     if (!drag || drag.id !== event.pointerId) return;
-    camera = panMap(
-      drag.camera,
-      event.clientX - drag.x,
-      event.clientY - drag.y,
-    );
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 6) drag.moved = true;
+    if (!drag.moved) return;
+    moving = true;
+    fitMode = false;
+    camera = panMap(drag.camera, dx, dy);
   }
 
   function end(event?: PointerEvent) {
@@ -113,8 +166,54 @@
       viewport.releasePointerCapture(id);
   }
 
+  function finish(event: PointerEvent) {
+    if (!drag || drag.id !== event.pointerId) return;
+    const path = drag.path;
+    const tapped =
+      !drag.moved &&
+      Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= 6;
+    end(event);
+    if (tapped && path) toggleNode(path);
+  }
+
+  function activate(event: MouseEvent) {
+    // Physical pointers are handled on pointerup. Assistive technology can
+    // activate a focused SVG button with a synthetic click instead.
+    if (event.detail !== 0 || drag) return;
+    const path = nodeElement(event.target)?.dataset.mapPath;
+    if (path) toggleNode(path);
+  }
+
+  function focusNode(event: FocusEvent) {
+    if (!viewport) return;
+    // Browser focus scrolling must not compete with the map camera.
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
+    const path = nodeElement(event.target)?.dataset.mapPath;
+    const box = layout.nodes.find((node) => node.path === path);
+    if (!box) return;
+    const next = revealMapRegion(camera, box, {
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+    });
+    if (
+      next.x !== camera.x ||
+      next.y !== camera.y ||
+      next.scale !== camera.scale
+    ) {
+      fitMode = false;
+      camera = next;
+    }
+  }
+
   function keyboard(event: KeyboardEvent) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const path = nodeElement(event.target)?.dataset.mapPath;
+    if (path && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      if (!event.repeat) toggleNode(path);
+      return;
+    }
     const step = event.shiftKey ? 80 : 32;
     const direction: Record<string, [number, number]> = {
       ArrowLeft: [step, 0],
@@ -145,20 +244,72 @@
   $effect(() => {
     const element = viewport;
     const currentLayout = layout;
-    if (!element || !currentLayout) return;
+    const basis = initialExpansion;
+    const currentMode = mode;
+    if (!element) return;
+    let frame: number | undefined;
     untrack(() => {
       end();
-      fitMode = true;
+      const anchor = pendingAnchor;
+      pendingAnchor = null;
+      const box =
+        anchor && currentLayout.nodes.find((node) => node.path === anchor.path);
+      if (
+        anchor &&
+        box &&
+        previousBasis === basis &&
+        previousMode === currentMode
+      ) {
+        camera = {
+          scale: camera.scale,
+          x: anchor.x - (box.x + box.width / 2) * camera.scale,
+          y: anchor.y - (box.y + box.height / 2) * camera.scale,
+        };
+        const group = [
+          box,
+          ...currentLayout.edges
+            .filter((edge) => edge.from === box)
+            .map((edge) => edge.to),
+        ];
+        const x = Math.min(...group.map((node) => node.x));
+        const y = Math.min(...group.map((node) => node.y));
+        camera = revealMapRegion(
+          camera,
+          {
+            x,
+            y,
+            width: Math.max(...group.map((node) => node.x + node.width)) - x,
+            height: Math.max(...group.map((node) => node.y + node.height)) - y,
+          },
+          { width: element.clientWidth, height: element.clientHeight },
+        );
+        // Replacing the SVG must not lose the keyboard user's node focus.
+        void tick().then(() => {
+          if (initialExpansion === basis && viewport === element)
+            element
+              .querySelector<SVGElement>(`[data-map-path="${box.path}"]`)
+              ?.focus({ preventScroll: true });
+        });
+      } else {
+        fitMode = true;
+        frame = requestAnimationFrame(fit);
+      }
+      previousBasis = basis;
+      previousMode = currentMode;
     });
+    return () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  });
+
+  $effect(() => {
+    const element = viewport;
+    if (!element) return;
     const observer = new ResizeObserver(() => {
       if (fitMode) fit();
     });
     observer.observe(element);
-    const frame = requestAnimationFrame(fit);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
+    return () => observer.disconnect();
   });
 
   $effect(() => {
@@ -176,13 +327,15 @@
     bind:this={viewport}
     onpointerdown={start}
     onpointermove={move}
-    onpointerup={end}
+    onpointerup={finish}
+    onclick={activate}
     onpointercancel={end}
     onlostpointercapture={end}
     onkeydown={keyboard}
+    onfocusin={focusNode}
     role="application"
     aria-roledescription="思维导图"
-    aria-label="思维导图画布，滚轮缩放，拖动平移；方向键移动，加减键缩放，Home 复位，1 原始大小"
+    aria-label="思维导图画布，点击父节点或按回车、空格展开收起；滚轮缩放，拖动平移；方向键移动，加减键缩放，Home 复位，1 原始大小"
     tabindex="0"
   >
     <div
@@ -204,7 +357,7 @@
     <p class="map-readability-hint">字太小？选择单个主题，或切换大纲阅读。</p>
   {/if}
   <div class="map-controls">
-    <span class="map-hint">滚轮缩放 · 拖动平移</span>
+    <span class="map-hint">点击展开 · 滚轮缩放 · 拖动平移</span>
     <div class="zoom-tools">
       <button
         class="icon-button small"

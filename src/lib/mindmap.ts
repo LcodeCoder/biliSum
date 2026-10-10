@@ -1,4 +1,5 @@
-import type { MindMapNode } from './types';
+import type { Appearance, MindMapNode } from './types';
+import { appearancePalette } from './theme';
 
 export function validateMindMap(input: unknown): MindMapNode {
   let count = 0;
@@ -71,22 +72,82 @@ export function escapeXml(text: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function wrapTitle(text: string): string[] {
+const MAP_FONT_FAMILY =
+  'system-ui, -apple-system, Segoe UI, Microsoft YaHei, sans-serif';
+const MAP_FONT_SIZE = 13;
+const MAP_LINE_HEIGHT = 20;
+const MAP_PADDING = 14;
+const MAP_FOOTER_HEIGHT = 20;
+const graphemes = new Intl.Segmenter('zh', { granularity: 'grapheme' });
+let textContext: CanvasRenderingContext2D | null | undefined;
+
+function titleMeasurer(depth: number): (text: string) => number {
+  if (textContext === undefined && typeof document !== 'undefined')
+    textContext = document.createElement('canvas').getContext('2d');
+  const context = textContext;
+  const font = `${depth < 2 ? 600 : 400} ${MAP_FONT_SIZE}px ${MAP_FONT_FAMILY}`;
+  const cache = new Map<string, number>();
+  return (text) => {
+    const cached = cache.get(text);
+    if (cached !== undefined) return cached;
+    // The extension and SVG/PNG exports use the same font metrics. Node-only
+    // callers use a conservative estimate, including wide Latin and emoji.
+    let width: number;
+    if (context) {
+      context.font = font;
+      width = context.measureText(text).width;
+    } else {
+      width = Array.from(graphemes.segment(text)).reduce(
+        (sum, { segment }) =>
+          sum +
+          MAP_FONT_SIZE *
+            (/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(segment)
+              ? 2
+              : 1),
+        0,
+      );
+    }
+    cache.set(text, width);
+    return width;
+  };
+}
+
+function wrapTitle(text: string, measure: (text: string) => number): string[] {
   const lines: string[] = [];
-  let line = '',
-    width = 0;
-  for (const char of text) {
-    const size = /[\x00-\xff]/.test(char) ? 0.55 : 1;
-    if (width + size > 12) {
+  let line = '';
+  for (const { segment } of graphemes.segment(text)) {
+    if (line && measure(line + segment) > 174 - MAP_PADDING * 2) {
       lines.push(line);
       line = '';
-      width = 0;
     }
-    line += char;
-    width += size;
+    line += segment;
   }
   if (line) lines.push(line);
   return lines;
+}
+
+function depthLimit(maxDepth?: number): number {
+  return Number.isFinite(maxDepth)
+    ? Math.max(0, Math.min(6, Math.floor(maxDepth!)))
+    : 6;
+}
+
+/** Paths are based on child indexes, so duplicate titles remain independent. */
+export function expandedMindMapPaths(
+  tree: MindMapNode,
+  maxDepth?: number,
+): Set<string> {
+  const paths = new Set<string>();
+  const limit = depthLimit(maxDepth);
+  function visit(node: MindMapNode, depth: number, path: string) {
+    if (!node.children.length || depth >= limit) return;
+    paths.add(path);
+    node.children.forEach((child, index) =>
+      visit(child, depth + 1, `${path}.${index}`),
+    );
+  }
+  visit(tree, 0, '0');
+  return paths;
 }
 
 export type MapLayoutMode = 'compact' | 'right';
@@ -94,8 +155,13 @@ export interface MapLayoutOptions {
   mode?: MapLayoutMode;
   /** Root is depth 0. Omitted means the complete tree. */
   maxDepth?: number;
+  /** When provided, only these parents show their immediate children. */
+  expandedPaths?: ReadonlySet<string>;
 }
 export interface MapBox {
+  path: string;
+  childCount: number;
+  expanded: boolean;
   x: number;
   y: number;
   width: number;
@@ -177,72 +243,119 @@ export function layoutMindMap(
   options: MapLayoutOptions = {},
 ): MapLayout {
   const mode = options.mode ?? 'compact';
-  const maxDepth = Number.isFinite(options.maxDepth)
-    ? Math.max(0, Math.min(6, Math.floor(options.maxDepth!)))
-    : 6;
+  const maxDepth = depthLimit(options.maxDepth);
   const gap = 12;
-  const step = 214;
-  const width = 174;
   const heights = new WeakMap<MindMapNode, number>();
   const sizes = new WeakMap<MindMapNode, number>();
-  const descendants = (node: MindMapNode): number => {
+  const titles = new WeakMap<MindMapNode, string[]>();
+  const measurers = [titleMeasurer(0), titleMeasurer(2)];
+  let width = 174;
+  function prepare(node: MindMapNode, depth: number): number {
+    const measure = measurers[depth < 2 ? 0 : 1]!;
+    const lines = wrapTitle(node.title, measure);
+    titles.set(node, lines);
+    // A single unsplittable grapheme must also fit inside the background.
+    for (const line of lines)
+      width = Math.max(width, Math.ceil(measure(line)) + MAP_PADDING * 2);
     const count =
-      1 + node.children.reduce((sum, child) => sum + descendants(child), 0);
+      1 +
+      node.children.reduce((sum, child) => sum + prepare(child, depth + 1), 0);
     sizes.set(node, count);
     return count;
-  };
-  descendants(tree);
-  const hiddenCount = (node: MindMapNode, depth: number) =>
-    depth >= maxDepth ? (sizes.get(node) ?? 1) - 1 : 0;
-  const ownHeight = (node: MindMapNode, depth: number) =>
-    wrapTitle(node.title).length * 18 +
-    20 +
-    (hiddenCount(node, depth) ? 16 : 0);
-  const childrenAt = (node: MindMapNode, depth: number) =>
-    depth < maxDepth ? node.children : [];
-  function measure(node: MindMapNode, depth: number): number {
-    const children = childrenAt(node, depth);
+  }
+  prepare(tree, 0);
+  const step = width + 40;
+  const isExpanded = (node: MindMapNode, depth: number, path: string) =>
+    node.children.length > 0 &&
+    (options.expandedPaths
+      ? options.expandedPaths.has(path)
+      : depth < maxDepth);
+  const hiddenCount = (node: MindMapNode, depth: number, path: string) =>
+    isExpanded(node, depth, path) ? 0 : (sizes.get(node) ?? 1) - 1;
+  const ownHeight = (node: MindMapNode, depth: number, path: string) =>
+    (titles.get(node)?.length ?? 1) * MAP_LINE_HEIGHT +
+    MAP_PADDING * 2 +
+    (hiddenCount(node, depth, path) ||
+    (options.expandedPaths && node.children.length)
+      ? MAP_FOOTER_HEIGHT
+      : 0);
+  const childrenAt = (node: MindMapNode, depth: number, path: string) =>
+    isExpanded(node, depth, path) ? node.children : [];
+  function measure(node: MindMapNode, depth: number, path: string): number {
+    const children = childrenAt(node, depth, path);
     const height = Math.max(
-      ownHeight(node, depth),
-      children.reduce((sum, child) => sum + measure(child, depth + 1), 0) +
+      ownHeight(node, depth, path),
+      children.reduce(
+        (sum, child, index) =>
+          sum + measure(child, depth + 1, `${path}.${index}`),
+        0,
+      ) +
         Math.max(0, children.length - 1) * gap,
     );
     heights.set(node, height);
     return height;
   }
-  measure(tree, 0);
+  measure(tree, 0, '0');
   const nodes: MapBox[] = [];
   const edges: MapEdge[] = [];
+  function boxAt(
+    node: MindMapNode,
+    depth: number,
+    path: string,
+    x: number,
+    y: number,
+    branch: number,
+  ): MapBox {
+    return {
+      path,
+      childCount: node.children.length,
+      expanded: isExpanded(node, depth, path),
+      x,
+      y,
+      width,
+      height: ownHeight(node, depth, path),
+      lines: titles.get(node)!,
+      depth,
+      branch,
+      title: node.title,
+      hiddenCount: hiddenCount(node, depth, path),
+    };
+  }
   function place(
     node: MindMapNode,
     depth: number,
+    path: string,
     top: number,
     branch: number,
     side: number,
   ): MapBox {
-    const box: MapBox = {
-      x: side * depth * step,
-      y: top + ((heights.get(node) ?? 0) - ownHeight(node, depth)) / 2,
-      width,
-      height: ownHeight(node, depth),
-      lines: wrapTitle(node.title),
+    const box = boxAt(
+      node,
       depth,
+      path,
+      side * depth * step,
+      top + ((heights.get(node) ?? 0) - ownHeight(node, depth, path)) / 2,
       branch,
-      title: node.title,
-      hiddenCount: hiddenCount(node, depth),
-    };
+    );
     nodes.push(box);
     let childTop = top;
-    for (const child of childrenAt(node, depth)) {
-      const childBox = place(child, depth + 1, childTop, branch, side);
+    childrenAt(node, depth, path).forEach((child, index) => {
+      const childBox = place(
+        child,
+        depth + 1,
+        `${path}.${index}`,
+        childTop,
+        branch,
+        side,
+      );
       edges.push({ from: box, to: childBox });
       childTop += (heights.get(child) ?? 0) + gap;
-    }
+    });
     return box;
   }
   const groups: { node: MindMapNode; branch: number }[][] = [[], []];
   const groupHeights = [0, 0];
-  childrenAt(tree, 0).forEach((node, branch) => {
+  childrenAt(tree, 0, '0').forEach((node, branch) => {
     // Greedy subtree-height balancing preserves the order on each side.
     const side =
       mode === 'compact' && groupHeights[0]! > groupHeights[1]! ? 1 : 0;
@@ -250,24 +363,28 @@ export function layoutMindMap(
     groups[side]!.push({ node, branch });
     groupHeights[side]! += heights.get(node) ?? 0;
   });
-  const contentHeight = Math.max(ownHeight(tree, 0), ...groupHeights);
+  const contentHeight = Math.max(ownHeight(tree, 0, '0'), ...groupHeights);
   // Place the root independently: only its direct branches are split left/right.
-  const root: MapBox = {
-    x: 0,
-    y: 24 + (contentHeight - ownHeight(tree, 0)) / 2,
-    width,
-    height: ownHeight(tree, 0),
-    lines: wrapTitle(tree.title),
-    depth: 0,
-    branch: 0,
-    title: tree.title,
-    hiddenCount: hiddenCount(tree, 0),
-  };
+  const root = boxAt(
+    tree,
+    0,
+    '0',
+    0,
+    24 + (contentHeight - ownHeight(tree, 0, '0')) / 2,
+    0,
+  );
   nodes.push(root);
   groups.forEach((group, side) => {
     let top = 24 + (contentHeight - groupHeights[side]!) / 2;
     for (const { node, branch } of group) {
-      const childBox = place(node, 1, top, branch, side === 0 ? 1 : -1);
+      const childBox = place(
+        node,
+        1,
+        `0.${branch}`,
+        top,
+        branch,
+        side === 0 ? 1 : -1,
+      );
       edges.push({ from: root, to: childBox });
       top += (heights.get(node) ?? 0) + gap;
     }
@@ -278,29 +395,9 @@ export function layoutMindMap(
   return { width: maxX - minX + 48, height: contentHeight + 48, nodes, edges };
 }
 
-const MAP_PALETTES = {
-  light: {
-    background: '#f9fbfe',
-    root: '#4b8fc9',
-    rootText: '#ffffff',
-    branch: '#edf5fc',
-    leaf: '#ffffff',
-    text: '#2b3e52',
-    colors: ['#4c92c9', '#6b9ec7', '#4385b6', '#79aad0', '#588eb8', '#87b3d5'],
-  },
-  dark: {
-    background: '#162230',
-    root: '#80b9e5',
-    rootText: '#12283b',
-    branch: '#22364a',
-    leaf: '#1b2c3c',
-    text: '#deebf7',
-    colors: ['#87bcea', '#a0c8e7', '#79b1dc', '#a7cfee', '#8fbad9', '#b0d1eb'],
-  },
-};
 export function renderMindMapSvg(
   tree: MindMapNode,
-  theme: 'light' | 'dark' = 'light',
+  theme: Appearance = 'light',
   options: MapLayoutOptions = {},
 ): string {
   return renderMindMapLayout(layoutMindMap(tree, options), tree.title, theme);
@@ -309,10 +406,11 @@ export function renderMindMapSvg(
 export function renderMindMapLayout(
   layout: MapLayout,
   title: string,
-  theme: 'light' | 'dark' = 'light',
+  theme: Appearance = 'light',
+  options: { interactive?: boolean } = {},
 ): string {
-  const palette = MAP_PALETTES[theme];
-  const colors = palette.colors;
+  const palette = appearancePalette(theme);
+  const colors = palette.mapColors;
   const paths = layout.edges
     .map((edge) => {
       const direction = edge.to.x > edge.from.x ? 1 : -1;
@@ -348,36 +446,59 @@ export function renderMindMapLayout(
       const color = colors[box.branch % colors.length]!;
       const fill =
         box.depth === 0
-          ? palette.root
+          ? palette.accent
           : box.depth === 1
-            ? palette.branch
-            : palette.leaf;
+            ? palette.soft
+            : palette.surface;
       const texts = box.lines
         .map(
           (line, index) =>
             '<tspan x="' +
-            (box.x + 15) +
+            (box.x + MAP_PADDING) +
             '" y="' +
-            (box.y + 24 + index * 18) +
+            (box.y + MAP_PADDING + MAP_FONT_SIZE + index * MAP_LINE_HEIGHT) +
             '">' +
             escapeXml(line) +
             '</tspan>',
         )
         .join('');
-      const folded = box.hiddenCount
+      const toggle = options.interactive && box.childCount > 0;
+      const action = box.expanded ? '收起子层' : '展开下一层';
+      const hint = box.hiddenCount
+        ? '+' + box.hiddenCount + ' 条未展开'
+        : toggle
+          ? '− 收起 ' + box.childCount + ' 个子项'
+          : '';
+      const folded = hint
         ? '<text x="' +
-          (box.x + 15) +
+          (box.x + MAP_PADDING) +
           '" y="' +
-          (box.y + box.height - 9) +
-          '" font-size="10" fill="' +
-          palette.text +
-          '" opacity=".7">+' +
-          box.hiddenCount +
-          ' 条未展开</text>'
+          (box.y + box.height - MAP_PADDING) +
+          '" font-size="11" fill="' +
+          (box.depth === 0 ? palette.onAccent : palette.text) +
+          '" opacity=".8">' +
+          hint +
+          '</text>'
         : '';
+      const group = options.interactive
+        ? '<g class="map-node" data-map-path="' +
+          escapeXml(box.path) +
+          '"' +
+          (toggle
+            ? ' role="button" tabindex="0" aria-expanded="' +
+              box.expanded +
+              '" aria-label="' +
+              action +
+              '：' +
+              escapeXml(box.title) +
+              '"'
+            : '') +
+          '>'
+        : '<g>';
       return (
-        '<g><title>' +
-        escapeXml(box.title) +
+        group +
+        '<title>' +
+        escapeXml(box.title + (toggle ? '（点击' + action + '）' : '')) +
         '</title><rect x="' +
         box.x +
         '" y="' +
@@ -389,13 +510,15 @@ export function renderMindMapLayout(
         '" rx="6" fill="' +
         fill +
         '" stroke="' +
-        (box.depth === 0 ? palette.root : color) +
+        (box.depth === 0 ? palette.accent : color) +
         '" stroke-opacity="' +
         (box.depth < 2 ? '1' : '.25') +
-        '"/><text font-size="13" font-weight="' +
+        '"/><text font-size="' +
+        MAP_FONT_SIZE +
+        '" font-weight="' +
         (box.depth < 2 ? '600' : '400') +
         '" fill="' +
-        (box.depth === 0 ? palette.rootText : palette.text) +
+        (box.depth === 0 ? palette.onAccent : palette.text) +
         '">' +
         texts +
         '</text>' +
@@ -413,9 +536,13 @@ export function renderMindMapLayout(
     layout.width +
     ' ' +
     layout.height +
-    '" role="img" aria-label="' +
+    '" role="' +
+    (options.interactive ? 'group' : 'img') +
+    '" aria-label="' +
     escapeXml(title) +
-    '" font-family="system-ui, -apple-system, Segoe UI, Microsoft YaHei, sans-serif"><title>' +
+    '" font-family="' +
+    MAP_FONT_FAMILY +
+    '" letter-spacing="0"><title>' +
     escapeXml(title) +
     '</title><rect width="100%" height="100%" fill="' +
     palette.background +

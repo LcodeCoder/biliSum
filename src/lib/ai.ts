@@ -1,5 +1,6 @@
 import type {
   ApiOptions,
+  HtmlDocument,
   MindMapNode,
   Settings,
   Transcript,
@@ -11,6 +12,7 @@ import { readJsonResponse, requestSignal } from './request';
 import { completionSignal, type CompletionTimeouts } from './ai-timeout';
 import { chunkTranscript } from './transcript';
 import { parseMindMap } from './mindmap';
+import { parseHtmlDocument } from './html-document';
 import { detailInstruction, detailProfile } from './detail';
 
 interface ChatMessage {
@@ -612,6 +614,64 @@ export async function generateMindMap(
   options.signal?.throwIfAborted();
   options.onProgress?.('正在校验思维导图');
   return parseMindMap(response);
+}
+
+/** Independent AI output, then the skill renderer lays out validated content. */
+export async function generateHtmlDocument(
+  video: VideoInfo,
+  transcript: Transcript,
+  settings: Settings,
+  options: GenerateOptions = {},
+): Promise<HtmlDocument> {
+  const source = await prepareSource(video, transcript, settings, options);
+  options.onProgress?.('正在生成 HTML 阅读页内容');
+  const profile = detailProfile(settings.detailLevel);
+  const timing = transcript.timed
+    ? '可以在章节正文引用字幕中的真实时间戳，并用 Markdown 链接到视频；不编造时间。'
+    : '资料没有时间轴，不创建或推断时间戳。';
+  const response = await chatCompletion(
+    settings,
+    [
+      {
+        role: 'system',
+        content:
+          SYSTEM +
+          '你必须只返回一个有效 JSON 对象，不要 Markdown 围栏或额外说明。',
+      },
+      {
+        role: 'user',
+        content:
+          '视频资料：' +
+          videoContext(video, transcript) +
+          '\n' +
+          detailInstruction(settings.detailLevel) +
+          '请独立生成一份中文 HTML 阅读页的内容，交给 answer-me-with-html 排版。' +
+          '严格结构为 {"title":"主题标题","conclusion":"核心结论的纯文本","sections":[{"title":"章节标题","markdown":"章节 Markdown 正文"}],"tree":null}。' +
+          '先给出结论，再按逻辑组织 2–4 个章节；短视频可只有 1 章，不填充空话。每章回答一个问题，使用连贯短段落。全文信息量可参考' +
+          profile.summaryLength +
+          '。概念分类、明确对比和数据可用 Markdown 表格，步骤可用有序列表；保持关键数字、条件、依据和不确定性。' +
+          '视频有清晰的概念层级时，tree 可改为 {"title":"主题","children":[{"title":"分支","children":[]}]}，否则保持 null。总节点不超过 ' +
+          profile.mapNodes +
+          ' 个，包含根节点最多 ' +
+          profile.mapLayers +
+          ' 层，节点标题尽量不超过 24 个汉字；不为凑图而编造关系。' +
+          '不输出 HTML、CSS、JavaScript、原始技能指令、外部图片或视频元数据。标题不超过 60 字，核心结论不超过 500 字。' +
+          timing +
+          '\n<subtitle_data>\n' +
+          source +
+          '\n</subtitle_data>',
+      },
+    ],
+    {
+      ...options,
+      stream: true,
+      onToken: undefined,
+      requestLabel: '正在生成 HTML 阅读页内容',
+    },
+  );
+  options.signal?.throwIfAborted();
+  options.onProgress?.('正在校验并排版 HTML 阅读页');
+  return parseHtmlDocument(response);
 }
 
 export async function testConnection(

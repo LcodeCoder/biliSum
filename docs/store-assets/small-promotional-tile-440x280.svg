@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="280" viewBox="0 0 440 280" role="img" aria-label="biliSum: Turn videos into clear notes. Mind maps, Markdown and subtitles for Bilibili." style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,'PingFang SC',sans-serif">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8fbff"/><stop offset=".56" stop-color="#eef6fc"/><stop offset="1" stop-color="#e4f0fa"/></linearGradient>
+  <linearGradient id="bluewash" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7eaf9"/><stop offset="1" stop-color="#c0dcf1"/></linearGradient>
+  <filter id="shadow" x="-25%" y="-30%" width="160%" height="175%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#1c4770" flood-opacity=".13"/></filter>
+  <filter id="softshadow" x="-30%" y="-50%" width="165%" height="220%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#234b70" flood-opacity=".09"/></filter>
+  <clipPath id="brandClip"><rect x="24" y="24" width="34" height="34" rx="7.48"/></clipPath>
+</defs>
+<rect width="440" height="280" fill="url(#bg)"/>
+<circle cx="413" cy="101" r="125" fill="url(#bluewash)" opacity=".55"/>
+<circle cx="440" cy="38" r="88" fill="none" stroke="#ffffff" stroke-width="1.5" opacity=".85"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASzSURBVHhe7dqxddtAEIRhlaAS3A8TleBS1AFKcAkuQTEjleASHDpwIL/Vs/SsHwdz+G4p3OIm+BIQOM5hRxRJ6e60nO863J+W88NpOT+elvPTaTk/n5bzi91U3OO413HP497HDDgX2eqAKJ74eyOc7SNmETPhnC5aHbggnuRHI4CNIWZzVRFWBzZ8+fuywye0McWsYmac48rqQMPX03L+2XgSG1vMLGbHeV5VgKWxsNUSM+RcpQJ8ayxmNcUsOd//FsA/+cfTfCVYHfj7e4MX2zGs3hNw+PHO0W/4jitm++HTAQvgj3rHFzNuFiC+QODJdkzvXxb9WwB/wzePmPWHAvinfz6vrwJvBfAfduYTM38tQPw5kQ/aHO798j+3hyhA/GMBH7A5PEYB/Nl/Xk9RAP8b17yeowA8aBNxASbnAkzOBZicCzA5F2ByLsDkXIDJuQCTcwEm9+kF+PX75RC4r6o+tQC8idVxfxW5AB24v4pcgA7cX0UuQAfuryIXoAP3V9EwBeC5o2DOCpmvMUQBeN5omLdKboULIGDeKrkVLoCAeavkVrgAAuatklvhAgiYNzM318xcW+ECCJg3KzfXI55/Cy6AgHkzcnOtLbwumwsgYN7e3FznEl6fyQUQMO8emCmLCyBg3j0wUxYXQMC8e2CmLC6AgHn3wExZXAAB8+6BmbK4AALm3QMzZXEBBMzbm5vrXMLrM7kAAubNyM21tvC6bC6AgHmzcnM94vm34AIImDczN9fMXFvhAgiYt0puhQsgYN4quRUugIB5q+RWuAAC5q2SW+ECCJi3Sm7FEAUY+WYyZ4XM1ximABVxfxW5AB24v4pcgA7cX0UuQAfuryIXoAP3V5EL0IH7q2iYAvDcUTBnhczXGKIAPG80zFslt8IFEDBvldwKF0DAvFVyK1wAAfNWya1wAQTMWyW3wgUQMG9mbq6ZubbCBRAwb1Zurkc8/xZcAAHzZuTmWlt4XTYXQMC8vbm5ziW8PpMLIGDePTBTFhdAwLx7YKYsLoCAeffATFlcAAHz7oGZsrgAAubdAzNlcQEEzLsHZsriAgiYtzc317mE12dyAQTMm5Gba23hddlcAAHzZuXmesTzb8EFEDBvZm6umbm2wgUQMG+V3AoXQMC8VXIrXAAB81bJrXABBMxbJbfCBRAwb5XciiEKMPLNZM4Kma8xTAEq4v4qcgE6cH8VuQAduL+KXIAO3F9FLkAH7q+iTy1A4E2sivuq6tMLYGNxASbnAkzOBZicCzA5F2ByLsDkXIDJuQCTiwI886BN4zkK8NR4wObwFAV4bDxgc3iMAjw0HrA5PEQB7hsP2BzuowDhe+NBO7aY+d1bAfxrYD4x8/cChB+Nk+yYYtavc/+3AH4VmMfrTz8LEPydwPHFjN9nzgJ8OS3nn42L7BhitjHjzQKEr40L7Rhith/mzeG/WRoXW20xU855swDhW2MRqylmyfleLEDwK0F9zZ98tQAhfm/4jWE9MbPV73xaHdgQ7xz9EbGOmNWHd/tbVgcuiC8Q/I3huGI271/yKFYHRPEk/gPSOGIWVw3+zerAleJPyfHE8U8l8bLjfy+7vbjHca/jnse9jxlwLrI/psk4+EDaWHEAAAAASUVORK5CYII=" x="24" y="24" width="34" height="34" clip-path="url(#brandClip)"/><text x="68" y="49" font-size="25" font-weight="720" fill="#20364d" >biliSum</text>
+<text x="24" y="102" font-size="29" font-weight="760" fill="#20364d" letter-spacing="-.7">Turn videos into</text>
+<text x="24" y="137" font-size="34" font-weight="760" fill="#2e78b7" letter-spacing="-.8">clear notes.</text>
+<text x="24" y="169" font-size="13" font-weight="500" fill="#597186" >Mind maps. Markdown. Subtitles.</text>
+<g filter="url(#softshadow)">
+  <rect x="283" y="90" width="55" height="39" rx="11" fill="#4f94ca"/>
+  <svg x="299" y="98" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 5 11 7-11 7Z"/></svg>
+  <path d="M338 109h14c7 0 8-4 8-12V75c0-7 3-10 11-10h8M338 109h41M338 109h14c7 0 8 4 8 12v22c0 7 3 10 11 10h8" fill="none" stroke="#7eadd2" stroke-width="1.9"/>
+  <rect x="377" y="50" width="44" height="30" rx="8" fill="#ffffff" stroke="#b7d2e8"/>
+  <rect x="377" y="94" width="44" height="30" rx="8" fill="#ffffff" stroke="#b7d2e8"/>
+  <rect x="377" y="138" width="44" height="30" rx="8" fill="#ffffff" stroke="#b7d2e8"/>
+  <path d="M388 61h21m-21 7h13M388 105h21m-21 7h13M388 149h21m-21 7h13" stroke="#7094b2" stroke-width="2" stroke-linecap="round"/>
+</g>
+<path d="M24 200h392" stroke="#d2e2ef"/>
+<svg x="24" y="216" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="6" height="8" rx="1.5"/><rect x="16" y="2" width="6" height="6" rx="1.5"/><rect x="16" y="16" width="6" height="6" rx="1.5"/><path d="M8 12h4m0 0V5h4m-4 7v7h4"/></svg><text x="51" y="230" font-size="14" font-weight="580" fill="#20364d" >A side panel for Bilibili</text>
+<text x="24" y="254" font-size="11.5" font-weight="450" fill="#597186" >Your AI provider · Chinese notes</text>
+<svg x="391" y="221" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+</svg>

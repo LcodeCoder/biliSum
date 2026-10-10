@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   fitMap,
   panMap,
+  revealMapRegion,
   zoomMap,
   MIN_MAP_SCALE,
   MAX_MAP_SCALE,
@@ -50,4 +51,40 @@ test('drag pans in screen pixels independently of zoom', () => {
   const camera = { x: -100, y: -400, scale: 2 };
   assert.deepEqual(panMap(camera, 75, -20), { x: -25, y: -420, scale: 2 });
   assert.deepEqual(camera, { x: -100, y: -400, scale: 2 });
+});
+
+test('revealing children on either side keeps their group in view at a readable scale', () => {
+  const viewport = { width: 320, height: 260 };
+  const camera = { x: -50, y: -300, scale: 1 };
+  for (const region of [
+    { x: 300, y: 200, width: 388, height: 180 },
+    { x: -500, y: 700, width: 388, height: 400 },
+  ]) {
+    const next = revealMapRegion(camera, region, viewport);
+    assert.ok(next.scale <= camera.scale);
+    assert.ok(next.x + region.x * next.scale >= 16 - 1e-8);
+    assert.ok(next.y + region.y * next.scale >= 16 - 1e-8);
+    assert.ok(
+      next.x + (region.x + region.width) * next.scale <=
+        viewport.width - 16 + 1e-8,
+    );
+    assert.ok(
+      next.y + (region.y + region.height) * next.scale <=
+        viewport.height - 16 + 1e-8,
+    );
+  }
+  assert.deepEqual(camera, { x: -50, y: -300, scale: 1 });
+});
+
+test('revealing already visible nodes preserves the camera and hidden views do not reset it', () => {
+  const camera = { x: 20, y: 30, scale: 0.5 };
+  const region = { x: 20, y: 20, width: 174, height: 80 };
+  assert.deepEqual(
+    revealMapRegion(camera, region, { width: 320, height: 300 }),
+    camera,
+  );
+  assert.deepEqual(
+    revealMapRegion(camera, region, { width: 0, height: 0 }),
+    camera,
+  );
 });
