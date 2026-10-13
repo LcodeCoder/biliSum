@@ -142,6 +142,8 @@
         {#if selected === 'imported'}<option value="imported"
             >已导入的字幕</option
           >{/if}
+        {#if selected === 'speech'}<option value="speech">本地语音识别</option
+          >{/if}
         {#each tracks as track (track.id)}<option value={track.id}
             >{track.label}</option
           >{/each}

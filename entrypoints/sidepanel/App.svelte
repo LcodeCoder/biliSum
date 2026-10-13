@@ -4,6 +4,14 @@
   import Icon from '../../src/components/Icon.svelte';
   import MindMapWorkspace from '../../src/components/MindMapWorkspace.svelte';
   import Subtitles from '../../src/components/Subtitles.svelte';
+  import SpeechSource from '../../src/components/SpeechSource.svelte';
+  import { getVideoAudioPlan, downloadAudio } from '../../src/lib/speech-audio';
+  import { transcribeSpeechAudio } from '../../src/lib/speech';
+  import { DEFAULT_SPEECH_PREFERENCES } from '../../src/lib/speech-types';
+  import type {
+    SpeechPreferences,
+    SpeechProgress,
+  } from '../../src/lib/speech-types';
   import HtmlReport from '../../src/components/HtmlReport.svelte';
   import type {
     HtmlReportLayout,
@@ -26,6 +34,10 @@
   } from '../../src/lib/ai';
   import {
     aiRuntime,
+    speechCache,
+    loadSpeechPreferences,
+    saveSpeechPreferences,
+    permitSpeech,
     loadSettings,
     savePreferences,
     hasApiPermission,
@@ -87,6 +99,14 @@
   let transcript = $state<Transcript | null>(null);
   let loading = $state(true);
   let sourceNotice = $state('');
+  let speechBusy = $state(false);
+  let speechProgress = $state<SpeechProgress | null>(null);
+  let speechPreferences = $state<SpeechPreferences>({
+    ...DEFAULT_SPEECH_PREFERENCES,
+  });
+  let speechPreferencesReady: Promise<void> = Promise.resolve();
+  let speechPreferencesTouched = false;
+  let speechPreferenceSave = Promise.resolve();
   let error = $state('');
   let toast = $state('');
   let busy = $state<GenerationKind | null>(null);
@@ -201,6 +221,8 @@
     sourceController = new AbortController();
     sourceSerial++;
     loading = true;
+    speechBusy = false;
+    speechProgress = null;
     error = '';
     sourceNotice = '';
     retryKind = null;
@@ -301,11 +323,39 @@
         transcript = null;
         summary = null;
         map = null;
+        htmlResult = null;
         draft = null;
         tracks = [];
         selectedTrack = '';
       }
       video = currentVideo;
+      await speechPreferencesReady;
+      if (!isCurrent(source.serial)) return;
+      if (!transcript) {
+        try {
+          const cached = await speechCache.load(
+            currentVideo,
+            speechPreferences.language,
+            speechPreferences.engine,
+          );
+          if (!isCurrent(source.serial)) return;
+          if (
+            cached &&
+            (await acceptTranscript(cached.transcript, source.serial))
+          ) {
+            selectedTrack = 'speech';
+            sourceNotice = '已恢复完整的本地识别字幕。';
+            await restoreResults(
+              currentVideo,
+              cached.transcript,
+              source.serial,
+            );
+          }
+        } catch {
+          /* Subtitle cache is optional; network subtitles remain usable. */
+        }
+      }
+      if (!isCurrent(source.serial)) return;
       try {
         const list = await getSubtitleTracks(currentVideo, {
           signal: source.signal,
@@ -318,8 +368,10 @@
         if (!transcript) tracks = list;
         if (!track) {
           sourceNotice = transcript
-            ? '未获取到新字幕，已保留原字幕和结果。可稍后刷新。'
-            : '当前视频没有返回可用字幕。可先登录 B 站再刷新，或导入已有字幕。';
+            ? selectedTrack === 'speech'
+              ? '已恢复完整的本地识别字幕，可直接生成资源。'
+              : '未获取到新字幕，已保留原字幕和结果。可稍后刷新。'
+            : '当前视频没有返回可用字幕。可从上方识别视频音频，也可登录 B 站后刷新或导入已有字幕。';
           return;
         }
         const cues = await getSubtitleCues(track, { signal: source.signal });
@@ -354,6 +406,93 @@
         error = errorMessage(cause);
         sourceNotice = error;
         loading = false;
+      }
+    }
+  }
+
+  function changeSpeechPreferences(value: SpeechPreferences) {
+    speechPreferencesTouched = true;
+    speechPreferences = value;
+    speechPreferenceSave = speechPreferenceSave
+      .catch(() => {})
+      .then(() => saveSpeechPreferences(value))
+      .catch(() => {
+        if (!disposed) notify('识别偏好未能保存，本次选择仍然有效');
+      });
+  }
+  function stopSpeech() {
+    if (!speechBusy) return;
+    sourceController?.abort(new DOMException('识别已取消。', 'AbortError'));
+    sourceSerial++;
+    speechBusy = false;
+    speechProgress = null;
+    loading = false;
+    sourceNotice = transcript
+      ? '识别已停止，已保留原字幕和结果。'
+      : '识别已停止，未采用部分视频内容。可重新开始。';
+    notify('音频识别已停止');
+  }
+  async function beginSpeech(file?: File) {
+    if (!video || loading || busy || speechBusy) return;
+    const currentVideo = $state.snapshot(video);
+    const preferences = $state.snapshot(speechPreferences);
+    const source = startSource(true);
+    speechBusy = true;
+    speechProgress = { message: '正在准备本地语音识别…' };
+    try {
+      // Request host access immediately from the user's click, before any await.
+      await permitSpeech(preferences, !file, source.signal);
+      if (!isCurrent(source.serial)) return;
+      let audio: Blob;
+      if (file) audio = file;
+      else {
+        speechProgress = { message: '正在获取当前分 P 的音轨…' };
+        const plan = await getVideoAudioPlan(currentVideo, {
+          signal: source.signal,
+        });
+        audio = await downloadAudio(plan, {
+          signal: source.signal,
+          onProgress: (value) => {
+            if (isCurrent(source.serial)) speechProgress = value;
+          },
+        });
+      }
+      const output = await transcribeSpeechAudio(
+        audio,
+        currentVideo.duration,
+        preferences,
+        source.signal,
+        (value) => {
+          if (isCurrent(source.serial)) speechProgress = value;
+        },
+      );
+      if (!isCurrent(source.serial) || source.signal.aborted) return;
+      if (!(await acceptTranscript(output.transcript, source.serial))) return;
+      selectedTrack = 'speech';
+      sourceNotice = output.transcript.timed
+        ? '完整音频识别完成，可生成资源、跳转时间和下载字幕。识别文字可能有误，请结合视频核对。'
+        : '完整音频识别完成，可生成资源和下载 TXT。浏览器未提供精确时间轴；需要 SRT 或跳转时请使用本地模型。';
+      await restoreResults(currentVideo, output.transcript, source.serial);
+      if (!file && isCurrent(source.serial)) {
+        try {
+          await speechCache.save(currentVideo, preferences.language, output);
+        } catch {
+          if (isCurrent(source.serial))
+            sourceNotice += ' 字幕缓存未能保存，当前内容仍可使用和下载。';
+        }
+      }
+    } catch (cause) {
+      if (isCurrent(source.serial) && !source.signal.aborted)
+        sourceNotice =
+          errorMessage(cause) +
+          (transcript
+            ? ' 已保留原字幕和结果。'
+            : ' 未采用部分识别内容，可重试或导入音频。');
+    } finally {
+      if (isCurrent(source.serial)) {
+        loading = false;
+        speechBusy = false;
+        speechProgress = null;
       }
     }
   }
@@ -713,6 +852,11 @@
         windowId = window.id;
       })
       .catch(() => {});
+    speechPreferencesReady = loadSpeechPreferences()
+      .then((value) => {
+        if (!disposed && !speechPreferencesTouched) speechPreferences = value;
+      })
+      .catch(() => {});
     void loadSettings()
       .then((value) => {
         if (!disposed)
@@ -884,15 +1028,29 @@
         <div class="source-status" class:ready={!!transcript}>
           <span class="status-dot"></span><span
             >{loading
-              ? '正在获取视频字幕…'
+              ? speechBusy
+                ? '正在识别完整视频音频…'
+                : '正在获取视频字幕…'
               : transcript
                 ? transcript.source + ' · ' + transcript.cues.length + ' 条字幕'
                 : video
-                  ? '尚未获取字幕，可前往字幕页导入'
+                  ? '尚未获取字幕，可识别音频或导入字幕'
                   : '在 B 站视频页使用'}</span
           >
         </div>
       </div>
+      {#if video}
+        <SpeechSource
+          preferences={speechPreferences}
+          busy={speechBusy}
+          disabled={loading || !!busy || !video}
+          hasTranscript={!!transcript}
+          progress={speechProgress}
+          onchange={changeSpeechPreferences}
+          onstart={beginSpeech}
+          onstop={stopSpeech}
+        />
+      {/if}
       {#if sourceChunks > 1}<p class="source-notice">
           字幕较长，将分 {sourceChunks} 段阅读后合并，首次至少需要 {sourceChunks +
             1} 次请求。相同配置下可复用本次侧栏中已完成的笔记；每次最终生成仍按服务商规则计费，可随时停止。

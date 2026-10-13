@@ -103,10 +103,11 @@ async function scenario(
     await page
       .getByRole('button', { name: '生成 Markdown 总结', exact: true })
       .waitFor();
-    await page.waitForFunction(
-      () =>
-        !document.querySelector('[aria-label="生成 Markdown 总结"]').disabled,
-    );
+    if (!query.includes('speech='))
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('[aria-label="生成 Markdown 总结"]').disabled,
+      );
     await run(page, context);
     assert.deepEqual(errors, [], 'no unhandled browser errors');
     assert.deepEqual(
@@ -286,6 +287,104 @@ test('HTTP error redacts credentials and explicit retry recovers', async () =>
     await page.waitForFunction(
       () =>
         !document.querySelector('[aria-label="下载 Markdown 总结"]').disabled,
+    );
+  }));
+
+test('origin-only API settings show the v1 endpoint and use it after saving and reloading', async () =>
+  scenario(
+    async (page) => {
+      await page.getByRole('button', { name: '打开 API 设置' }).click();
+      const address = page.getByLabel('API 地址', { exact: true });
+      const explicit =
+        'https://very-long-api-host-name.example/proxy/compatible-mode/v1/chat/completions';
+      await address.fill(explicit + '/');
+      assert.equal(
+        (await page.locator('#api-endpoint').innerText()).trim(),
+        '请求地址：' + explicit,
+      );
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      await address.fill('https://example.com/v1?key=hidden-key');
+      assert.equal(await page.locator('#api-endpoint').count(), 0);
+      await address.fill('https://api.lcode.store');
+      await page.getByLabel('模型名称', { exact: true }).fill('minimax-m3');
+      const endpoint = 'https://api.lcode.store/v1/chat/completions';
+      assert.equal(
+        (await page.locator('#api-endpoint').innerText()).trim(),
+        '请求地址：' + endpoint,
+      );
+      await page.getByRole('button', { name: '测试 API 连接' }).click();
+      await page.getByText('连接成功。请保存配置。').waitFor();
+      assert.deepEqual(
+        await page.evaluate(() => window.__biliSumFixture.stats.urls),
+        [endpoint],
+      );
+      await page.getByRole('button', { name: '保存 API 设置' }).click();
+      await page.getByText('API 设置已保存').waitFor();
+      await generate(page);
+      assert.deepEqual(
+        await page.evaluate(() => window.__biliSumFixture.stats.urls),
+        [endpoint, endpoint],
+      );
+      await page.reload();
+      await ready(page);
+      await page.getByRole('button', { name: '打开 API 设置' }).click();
+      assert.equal(await address.inputValue(), 'https://api.lcode.store');
+      assert.equal(
+        (await page.locator('#api-endpoint').innerText()).trim(),
+        '请求地址：' + endpoint,
+      );
+      assert.equal(
+        await page.getByLabel('模型名称', { exact: true }).inputValue(),
+        'minimax-m3',
+      );
+    },
+    '&api=v1-only',
+    { width: 280, height: 850 },
+  ));
+
+test('HTML API responses give endpoint guidance and preserve existing resources without retries', async () =>
+  scenario(async (page) => {
+    await generate(page);
+    const original = await page.locator('.markdown-body').innerText();
+    await page.getByRole('button', { name: '打开 API 设置' }).click();
+    await fault(page, { stream: 'html' });
+    await page.getByRole('button', { name: '测试 API 连接' }).click();
+    const alert = page.getByRole('alert');
+    await alert.filter({ hasText: '网页' }).waitFor();
+    const message = await alert.innerText();
+    assert.match(message, /\/v1\/chat\/completions/);
+    assert.ok(!message.includes('fixture-key'));
+    assert.ok(!message.includes('private-page'));
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.ai),
+      2,
+    );
+    await page.getByRole('button', { name: '返回工作空间' }).click();
+    assert.equal(await page.locator('.markdown-body').innerText(), original);
+    await page.getByRole('button', { name: '重新生成', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: '网页' }).waitFor();
+    assert.equal(await page.locator('.markdown-body').innerText(), original);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '下载 Markdown 总结', exact: true })
+        .isEnabled(),
+      true,
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.ai),
+      3,
+    );
+    await fault(page, { stream: '' });
+    await page.getByRole('button', { name: '打开 API 设置' }).click();
+    await page.getByRole('button', { name: '测试 API 连接' }).click();
+    await page.getByText('连接成功。请保存配置。').waitFor();
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.ai),
+      4,
     );
   }));
 
@@ -2529,3 +2628,215 @@ test('HTML cancellation stops requests, keeps complete results and never shows a
       await page.evaluate(() => window.__biliSumFixture.stats.aborted >= 3),
     );
   }));
+
+test('no subtitles: real WAV decoding, Whisper transcript and all generated resources complete the workflow', async () =>
+  scenario(
+    async (page) => {
+      await ready(page);
+      assert.equal(
+        await page
+          .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+          .isEnabled(),
+        false,
+      );
+      await page
+        .getByRole('button', { name: '识别视频音频', exact: true })
+        .click();
+      await ready(page);
+      assert.match(
+        await page.locator('.source-notice').innerText(),
+        /完整音频识别完成/,
+      );
+      await generate(page);
+      await generateMap(page);
+      await openHtml(page);
+      await generateHtml(page);
+      assert.deepEqual(
+        await page.evaluate(() => window.__biliSumFixture.stats.kinds),
+        ['summary', 'map', 'html'],
+      );
+      await page.reload();
+      await ready(page);
+      assert.equal(
+        await page.locator('[aria-label="生成 Markdown 总结"]').isEnabled(),
+        true,
+      );
+      assert.match(
+        await page.locator('.source-notice').innerText(),
+        /已恢复完整/,
+      );
+    },
+    '&speech=whisper&theme=dark',
+    { width: 280, height: 950 },
+  ));
+
+test('speech cancellation and part switch reject partial and stale transcripts', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await fault(page, { speech: 'hang' });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await page.getByRole('button', { name: '停止识别', exact: true }).click();
+    await ready(page);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+        .isEnabled(),
+      false,
+    );
+    await fault(page, { speech: 'slow' });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await page.waitForFunction(
+      () => window.__biliSumFixture.stats.speechStarts > 0,
+    );
+    await page.evaluate(() => window.__biliSumFixture.switchPage(2));
+    await ready(page);
+    await page.waitForTimeout(1000);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+        .isEnabled(),
+      false,
+    );
+    await fault(page, { speech: '' });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    assert.match(await page.locator('.cue-list').innerText(), /P2: 从音频/);
+  }, '&speech=whisper&theme=eye'));
+
+test('failed speech recognition preserves prior subtitles and generated summary', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await generate(page);
+    const summary = await page.locator('.markdown-body').innerText();
+    if (
+      !(await page
+        .locator('.setup-section')
+        .getAttribute('open')
+        .then((value) => value !== null))
+    )
+      await page.getByLabel('视频与生成设置', { exact: true }).click();
+    await page.locator('.speech-source > summary').click();
+    await fault(page, { speech: 'error' });
+    await page
+      .getByRole('button', { name: '重新识别音频', exact: true })
+      .click();
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /已保留原字幕和结果/,
+    );
+    assert.equal(await page.locator('.markdown-body').innerText(), summary);
+  }, '&speech=ready'));
+
+test('native speech uses explicit local audio and offers TXT without fabricated SRT timecodes', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.nativeStarts),
+      1,
+    );
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /精确时间轴/,
+    );
+    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    assert.equal(
+      await page
+        .getByRole('button', { name: '下载 TXT 字幕', exact: true })
+        .isEnabled(),
+      true,
+    );
+    assert.equal(
+      await page
+        .getByRole('button', { name: '下载 SRT 字幕', exact: true })
+        .isEnabled(),
+      false,
+    );
+  }, '&speech=native'));
+
+test('native failure in automatic mode restarts with Whisper and returns precise local model subtitles', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await fault(page, { speech: 'native-error' });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    assert.deepEqual(
+      await page.evaluate(() => [
+        window.__biliSumFixture.stats.nativeStarts,
+        window.__biliSumFixture.stats.speechStarts,
+      ]),
+      [1, 1],
+    );
+    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    assert.match(await page.locator('.cue-list').innerText(), /从音频识别/);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '下载 SRT 字幕', exact: true })
+        .isEnabled(),
+      true,
+    );
+  }, '&speech=native'));
+
+test('cancelled speech permission request cannot download audio or start recognition later', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await fault(page, { permission: true });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await page.waitForFunction(
+      () => !!window.__biliSumFixture.resolvePermission,
+    );
+    await page.getByRole('button', { name: '停止识别', exact: true }).click();
+    await page.evaluate(() => window.__biliSumFixture.resolvePermission(true));
+    await ready(page);
+    await page.waitForTimeout(100);
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.speechStarts),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+        .isEnabled(),
+      false,
+    );
+  }, '&speech=whisper'));
+
+test('importing wrong-part audio rejects duration mismatch while preserving completed subtitles and resources', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await generate(page);
+    const summary = await page.locator('.markdown-body').innerText();
+    const data = await page.evaluate(() =>
+      Array.from(new Uint8Array(window.__biliSumFixture.wav(10))),
+    );
+    await page.getByLabel('选择音频文件', { exact: true }).setInputFiles({
+      name: 'wrong-part.wav',
+      mimeType: 'audio/wav',
+      buffer: Buffer.from(data),
+    });
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /时长与当前分 P 不一致/,
+    );
+    assert.equal(await page.locator('.markdown-body').innerText(), summary);
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.speechStarts),
+      0,
+    );
+  }, '&speech=ready'));

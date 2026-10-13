@@ -19,3 +19,6 @@ dist/
 coverage/
 playwright-report/
 test-results/
+
+# Bundled speech runtime, regenerated from pinned dependencies
+public/asr-runtime/

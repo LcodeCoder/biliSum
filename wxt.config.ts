@@ -2,12 +2,32 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   modules: ['@wxt-dev/module-svelte'],
+  vite: () => ({
+    worker: { format: 'es' },
+    resolve: {
+      conditions: [
+        'browser',
+        'module',
+        'import',
+        'onnxruntime-web-use-extern-wasm',
+      ],
+    },
+  }),
   manifest: {
     name: 'biliSum',
     description:
       '在 B 站旁边整理视频：AI 思维导图、Markdown / HTML 阅读页与完整字幕，支持本地下载。',
     minimum_chrome_version: '120',
-    permissions: ['storage', 'sidePanel', 'scripting'],
+    permissions: [
+      'storage',
+      'sidePanel',
+      'scripting',
+      'declarativeNetRequestWithHostAccess',
+    ],
+    content_security_policy: {
+      extension_pages:
+        "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+    },
     host_permissions: ['https://*.bilibili.com/*', 'https://*.hdslb.com/*'],
     optional_host_permissions: [
       'https://*/*',

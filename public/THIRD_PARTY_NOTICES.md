@@ -77,3 +77,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Other dependencies retain their own licenses in their packages. All application code is bundled locally; no remote scripts are loaded.
+
+## Local speech recognition
+
+- Hugging Face Transformers.js 4.3.1 is distributed under Apache-2.0. The full license is included in `licenses/Transformers-Apache-2.0.txt`.
+- ONNX Runtime Web 1.31.0-dev.20260914-8d85527a0 is pinned by Transformers.js. Its JavaScript and the unmodified Asyncify WebAssembly runtime are distributed under MIT. The full license is included in `licenses/ONNX-Runtime-MIT.txt`. Source: https://github.com/microsoft/onnxruntime/tree/8d85527a010e294a26b274749f74294b2a32cec5.
+- Mediabunny 1.61.4 is distributed under MPL-2.0. No Mediabunny source files are modified. Its full license is included in `licenses/Mediabunny-MPL-2.0.txt`. The corresponding original source is available in the exact npm source package https://registry.npmjs.org/mediabunny/-/mediabunny-1.61.4.tgz and at https://github.com/Vanilagy/mediabunny/tree/v1.61.4.
+- @noble/hashes 2.0.1 is distributed under MIT, copyright (c) 2022 Paul Miller. The full license is included in `licenses/Noble-Hashes-MIT.txt`.
+- Whisper Base ONNX model data is downloaded separately from `Xenova/whisper-base`, fixed revision `64da57285918e20ea79ea5c88eed7197933abaa8`; it is not embedded in the extension package. The model card declares Apache-2.0; the original OpenAI Whisper project uses MIT, included in `licenses/Whisper-MIT.txt`. Model source and conversion metadata: https://huggingface.co/Xenova/whisper-base/tree/64da57285918e20ea79ea5c88eed7197933abaa8.
+
+All speech executable JavaScript and WebAssembly are packaged locally. Only model data is fetched remotely. Browser-managed on-device speech language packs are provided by the browser and are not redistributed by biliSum. The audio workflow was studied from voice-over-translation; no source code from that project was copied.

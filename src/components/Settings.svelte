@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import { aiRuntime, permitApi, saveSettings } from '../lib/extension';
   import { testConnection } from '../lib/ai';
+  import { completionUrl } from '../lib/config';
   import { errorMessage } from '../lib/request';
   import type { Settings } from '../lib/types';
 
@@ -18,6 +19,13 @@
     onsaving: (value: boolean) => void;
   } = $props();
   let form = $state<Settings>(untrack(() => ({ ...settings })));
+  let endpoint = $derived.by(() => {
+    try {
+      return completionUrl(form.apiBaseUrl);
+    } catch {
+      return '';
+    }
+  });
   let visible = $state(false);
   let busy = $state<'save' | 'test' | null>(null);
   let error = $state('');
@@ -29,7 +37,7 @@
     const value = (event.currentTarget as HTMLSelectElement).value;
     const providers: Record<string, [string, string]> = {
       openai: ['https://api.openai.com/v1', 'gpt-4o-mini'],
-      deepseek: ['https://api.deepseek.com', 'deepseek-chat'],
+      deepseek: ['https://api.deepseek.com/v1', 'deepseek-chat'],
       local: ['http://localhost:11434/v1', ''],
     };
     const provider = providers[value];
@@ -127,6 +135,9 @@
       <input
         class="form-control"
         id="api-url"
+        aria-describedby={endpoint
+          ? 'api-url-hint api-endpoint'
+          : 'api-url-hint'}
         type="url"
         bind:value={form.apiBaseUrl}
         placeholder="https://your-api.com/v1"
@@ -134,7 +145,14 @@
         spellcheck="false"
         autocomplete="off"
       />
-      <p class="field-hint">支持基础地址，或完整的 /chat/completions 地址。</p>
+      <p class="field-hint" id="api-url-hint">
+        只填域名会补全
+        /v1/chat/completions；也支持服务商指定的基础路径或完整接口地址。
+      </p>
+      {#if endpoint}<p class="field-hint api-endpoint" id="api-endpoint">
+          请求地址：{endpoint}
+        </p>{/if}
+
       <label for="api-key">API Key</label>
       <div class="key-field control-field">
         <Icon name="key" size={17} /><input

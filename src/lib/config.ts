@@ -29,9 +29,12 @@ export function completionUrl(input: string): string {
       'API 地址中请只填写服务地址与路径，密钥填写在 API Key 一栏。',
     );
   }
-  url.pathname = url.pathname.replace(/\/+$/, '');
-  if (!url.pathname.endsWith('/chat/completions'))
-    url.pathname += '/chat/completions';
+  // Use a local path: setting URL.pathname to '' normalizes it back to '/',
+  // which would introduce a duplicate slash when appending the endpoint.
+  const path = url.pathname.replace(/\/+$/, '') || '/v1';
+  url.pathname = path.endsWith('/chat/completions')
+    ? path
+    : path + '/chat/completions';
   return url.toString();
 }
 

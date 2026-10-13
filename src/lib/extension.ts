@@ -1,4 +1,8 @@
 import { browser } from 'wxt/browser';
+import { AUDIO_ORIGINS } from './speech-audio';
+import { normalizeSpeechPreferences } from './speech-types';
+import { MODEL_ORIGINS } from './speech-model';
+import { createSpeechCache } from './speech-cache';
 import { DEFAULT_SETTINGS, apiOriginPattern, validateSettings } from './config';
 import { parseVideoUrl } from './bilibili';
 import { abortable, requestSignal } from './request';
@@ -209,3 +213,45 @@ export async function saveResults(
 ): Promise<void> {
   return resultCache.save(videoKey(video), value, kind);
 }
+
+// Voice recognition preferences and completed transcripts do not depend on an AI API key.
+const SPEECH_PREFERENCES_KEY = 'biliSum.speech.preferences.v1';
+export async function loadSpeechPreferences() {
+  return normalizeSpeechPreferences(
+    (await browser.storage.local.get(SPEECH_PREFERENCES_KEY))[
+      SPEECH_PREFERENCES_KEY
+    ],
+  );
+}
+export async function saveSpeechPreferences(
+  preferences: import('./speech-types').SpeechPreferences,
+) {
+  await browser.storage.local.set({
+    [SPEECH_PREFERENCES_KEY]: normalizeSpeechPreferences(preferences),
+  });
+}
+export async function permitSpeech(
+  preferences: import('./speech-types').SpeechPreferences,
+  fromVideo: boolean,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted();
+  // Keep this call synchronous up to permissions.request(), preserving the click gesture.
+  const origins = [
+    ...(fromVideo ? AUDIO_ORIGINS : []),
+    ...(preferences.engine === 'native' ? [] : MODEL_ORIGINS),
+  ];
+  if (!origins.length) return;
+  const permission = browser.permissions.request({ origins });
+  if (!(await abortable(permission, signal)))
+    throw new Error('请允许访问音频或模型下载服务，再开始本地识别。');
+  signal.throwIfAborted();
+}
+export const speechCache = createSpeechCache(
+  browser.storage.local,
+  async (operation) => {
+    if (globalThis.navigator?.locks)
+      await navigator.locks.request('biliSum.transcripts', operation);
+    else await operation();
+  },
+);

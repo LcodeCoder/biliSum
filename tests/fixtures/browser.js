@@ -2,6 +2,7 @@
 (() => {
   const parameters = new URLSearchParams(location.search);
   const mode = parameters.get('mode') || 'ready';
+  const speechMode = parameters.get('speech');
   const faults = {
     language: false,
     subtitles: false,
@@ -13,14 +14,21 @@
     retryAfter: '1',
     rateStorage: false,
     hash: false,
+    speech: '',
+    nativeStatus: 'available',
   };
   const stats = {
     ai: 0,
     aborted: 0,
     starts: [],
     streams: [],
+    urls: [],
     kinds: [],
     waitingCompletion: false,
+    speechStarts: 0,
+    speechTerminated: 0,
+    nativeStarts: 0,
+    nativeAborted: 0,
   };
   window.__biliSumFixture = {
     faults,
@@ -55,6 +63,12 @@
       { page: 2, cid: 102, part: '第二部分：知识的迁移', duration: 530 },
     ],
   };
+  if (speechMode) {
+    const speechDuration = Number(parameters.get('speechDuration')) || 2;
+    fixtureVideo.duration = speechDuration;
+    fixtureVideo.pages[0].duration = speechDuration;
+    fixtureVideo.pages[1].duration = 3;
+  }
   const subtitles = [
     {
       from: 0,
@@ -256,7 +270,7 @@
     runtime: {
       id: 'bilisum-fixture',
       getURL: (path) => location.origin + '/' + path,
-      getManifest: () => ({ version: '0.1.10' }),
+      getManifest: () => ({ version: '0.1.12' }),
       onInstalled: event('installed'),
       onStartup: event('startup'),
     },
@@ -327,6 +341,123 @@
   };
   Object.defineProperty(window, 'chrome', { value: api, configurable: true });
   Object.defineProperty(window, 'browser', { value: api, configurable: true });
+  // Deterministic recognition workers; the decoder below still processes real WAV bytes.
+  if (speechMode !== 'real') {
+    const RealWorker = window.Worker;
+    window.Worker = class SpeechWorker extends EventTarget {
+      constructor(url, options) {
+        super();
+        if (!String(url).includes('speech.worker-'))
+          return new RealWorker(url, options);
+        this.dead = false;
+      }
+      terminate() {
+        if (!this.dead) stats.speechTerminated++;
+        this.dead = true;
+      }
+      postMessage(message) {
+        if (message.type === 'transcribe') stats.speechStarts++;
+        const fail = faults.speech;
+        const part = currentPage;
+        if (fail === 'hang') return;
+        setTimeout(
+          () => {
+            if (this.dead) return;
+            const result =
+              message.type === 'init'
+                ? true
+                : {
+                    text: 'P' + part + ': 从音频识别的完整知识内容。',
+                    chunks: [
+                      {
+                        text: 'P' + part + ': 从音频识别的完整知识内容。',
+                        timestamp: [0, message.samples.length / 16000],
+                      },
+                    ],
+                  };
+            this.dispatchEvent(
+              new MessageEvent('message', {
+                data:
+                  fail === 'error'
+                    ? {
+                        id: message.id,
+                        type: 'error',
+                        message: '模拟模型处理失败',
+                      }
+                    : { id: message.id, type: 'result', result },
+              }),
+            );
+          },
+          fail === 'slow' ? 800 : 20,
+        );
+      }
+    };
+    class Recognition {
+      processLocally = true;
+      static async available(options) {
+        if (!options.processLocally)
+          throw new Error('Cloud recognition forbidden');
+        return speechMode === 'native' ? faults.nativeStatus : 'unavailable';
+      }
+      static async install(options) {
+        if (!options.processLocally)
+          throw new Error('Cloud recognition forbidden');
+        return true;
+      }
+      start(track) {
+        if (!track || track.kind !== 'audio' || !this.processLocally)
+          throw new Error('Only explicit local audio permitted');
+        stats.nativeStarts++;
+        setTimeout(() => {
+          if (faults.speech === 'native-error')
+            this.onerror?.({ error: 'audio-capture' });
+          else this.onstart?.();
+        }, 10);
+      }
+      stop() {
+        const result = [{ transcript: '从浏览器本地识别的完整内容' }];
+        result.isFinal = true;
+        this.onresult?.({ resultIndex: 0, results: [result] });
+        this.onend?.();
+      }
+      abort() {
+        stats.nativeAborted++;
+      }
+    }
+    Object.defineProperty(Recognition.prototype, 'processLocally', {
+      value: true,
+      writable: true,
+    });
+    window.SpeechRecognition = Recognition;
+  }
+  function wav(seconds) {
+    const count = 16000 * seconds,
+      data = new ArrayBuffer(44 + count * 2),
+      view = new DataView(data);
+    const text = (offset, value) =>
+      [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+    text(0, 'RIFF');
+    view.setUint32(4, data.byteLength - 8, true);
+    text(8, 'WAVE');
+    text(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, 16000, true);
+    view.setUint32(28, 32000, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    text(36, 'data');
+    view.setUint32(40, count * 2, true);
+    for (let i = 0; i < count; i++)
+      view.setInt16(
+        44 + i * 2,
+        Math.sin((i * Math.PI * 2 * 220) / 16000) * 5000,
+        true,
+      );
+    return data;
+  }
+  window.__biliSumFixture.wav = wav;
   const originalFetch = window.fetch.bind(window);
   const reply = (data) =>
     new Response(JSON.stringify(data), {
@@ -336,13 +467,34 @@
     const url = String(input);
     if (url.startsWith('https://api.bilibili.com/x/web-interface/view'))
       return reply({ code: 0, data: fixtureVideo });
+    if (url.includes('/x/player/') && url.includes('playurl?'))
+      return reply({
+        code: 0,
+        data: {
+          timelength: (currentPage === 1 ? 2 : 3) * 1000,
+          dash: {
+            audio: [
+              {
+                codecs: 'mp4a.40.2',
+                bandwidth: 32000,
+                baseUrl: 'https://a.bilivideo.com/fixture.wav',
+              },
+            ],
+          },
+        },
+      });
+    if (url.startsWith('https://a.bilivideo.com/fixture.wav'))
+      return new Response(wav(currentPage === 1 ? 2 : 3));
     if (url.startsWith('https://api.bilibili.com/x/player/'))
       return reply({
         code: 0,
         data: {
           subtitle: {
             subtitles:
-              mode === 'empty'
+              mode === 'empty' ||
+              speechMode === 'whisper' ||
+              speechMode === 'native' ||
+              speechMode === 'real'
                 ? []
                 : [
                     {
@@ -376,10 +528,19 @@
     }
     if (url.endsWith('/chat/completions')) {
       stats.ai++;
+      stats.urls.push(url);
       stats.starts.push(Date.now());
       const payload = JSON.parse(init.body);
       stats.streams.push(payload.stream);
       stats.waitingCompletion = false;
+      if (
+        faults.stream === 'html' ||
+        (parameters.get('api') === 'v1-only' &&
+          new URL(url).pathname !== '/v1/chat/completions')
+      )
+        return new Response('<html>fixture-key private-page</html>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
       if (faults.stream === 'gateway')
         return new Response('<html>524 fixture-key</html>', {
           status: 524,

@@ -45,14 +45,34 @@ const jsonReply = (content: string, finish_reason = 'stop') =>
   );
 
 test('API URLs support bases, full endpoint and localhost; origin permission is narrow', () => {
-  assert.equal(
-    completionUrl('https://example.com/v1/'),
-    'https://example.com/v1/chat/completions',
-  );
-  assert.equal(
-    completionUrl('https://example.com/v1/chat/completions'),
-    'https://example.com/v1/chat/completions',
-  );
+  const cases = [
+    ['https://api.lcode.store', 'https://api.lcode.store/v1/chat/completions'],
+    [' https://example.com/// ', 'https://example.com/v1/chat/completions'],
+    ['https://example.com/v1/', 'https://example.com/v1/chat/completions'],
+    [
+      'https://example.com/v1/chat/completions/',
+      'https://example.com/v1/chat/completions',
+    ],
+    [
+      'https://example.com/chat/completions',
+      'https://example.com/chat/completions',
+    ],
+    [
+      'https://example.com/api/v2/',
+      'https://example.com/api/v2/chat/completions',
+    ],
+    [
+      'https://example.com/compatible-mode/v1',
+      'https://example.com/compatible-mode/v1/chat/completions',
+    ],
+    ['http://localhost:11434', 'http://localhost:11434/v1/chat/completions'],
+    [
+      'http://127.0.0.1:8080/chat/completions',
+      'http://127.0.0.1:8080/chat/completions',
+    ],
+  ];
+  for (const [input, expected] of cases)
+    assert.equal(completionUrl(input!), expected, input);
   assert.equal(
     apiOriginPattern('http://127.0.0.1:11434/v1'),
     'http://127.0.0.1/*',
@@ -62,6 +82,80 @@ test('API URLs support bases, full endpoint and localhost; origin permission is 
     () => completionUrl('https://example.com/v1?key=secret'),
     /路径/,
   );
+});
+
+test('origin-only API settings use the same v1 endpoint for connection tests and summaries', async () => {
+  const config = {
+    ...settings,
+    apiBaseUrl: 'https://api.lcode.store',
+    model: 'minimax-m3',
+  };
+  const requests: { url: string; stream: boolean }[] = [];
+  const options = {
+    runtime: createAiRuntime({ intervalMs: 0 }),
+    fetcher: (async (input, init) => {
+      const payload = JSON.parse(String(init?.body));
+      requests.push({ url: String(input), stream: payload.stream });
+      assert.equal(payload.model, config.model);
+      if (String(input) !== 'https://api.lcode.store/v1/chat/completions')
+        return new Response('<html>API website</html>', {
+          headers: { 'Content-Type': 'text/html' },
+        });
+      return jsonReply(payload.stream ? '## 总结\n内容完整。' : 'OK');
+    }) as typeof fetch,
+  };
+  await testConnection(config, options);
+  const result = await generateSummary(
+    video,
+    {
+      source: 'fixture',
+      timed: false,
+      cues: [{ from: 0, to: 0, content: '内容完整。' }],
+    },
+    config,
+    options,
+  );
+  assert.equal(result, '## 总结\n内容完整。');
+  assert.deepEqual(requests, [
+    { url: 'https://api.lcode.store/v1/chat/completions', stream: false },
+    { url: 'https://api.lcode.store/v1/chat/completions', stream: true },
+  ]);
+});
+
+test('HTML API responses explain the endpoint without exposing page content or retrying', async () => {
+  let requests = 0;
+  let cancelled = false;
+  const response = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('<html>fixture-key private-page</html>'),
+        );
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }),
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  );
+  await assert.rejects(
+    chatCompletion(settings, [], {
+      runtime: createAiRuntime({ intervalMs: 0 }),
+      fetcher: (async () => {
+        requests++;
+        return response;
+      }) as typeof fetch,
+    }),
+    (error: Error) => {
+      assert.match(error.message, /网页/);
+      assert.match(error.message, /\/v1\/chat\/completions/);
+      assert.ok(!error.message.includes(settings.apiKey));
+      assert.ok(!error.message.includes('private-page'));
+      return true;
+    },
+  );
+  assert.equal(requests, 1);
+  assert.equal(cancelled, true);
 });
 
 test('SSE decoding preserves Chinese split at every byte and sealed CRLF events', async () => {

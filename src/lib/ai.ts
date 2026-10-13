@@ -284,8 +284,13 @@ async function performCompletion(
     } else {
       if (contentType && !contentType.includes('text/event-stream')) {
         await response.body?.cancel().catch(() => {});
+        const isHtml =
+          contentType.includes('text/html') ||
+          contentType.includes('application/xhtml+xml');
         throw new Error(
-          'API 返回的内容不是 JSON 或事件流，请检查 Chat Completions 地址。',
+          isHtml
+            ? 'API 返回的是网页，不是 JSON 或事件流。请填写 Chat Completions 接口地址（通常为 /v1/chat/completions）；若地址已正确，请检查服务网关。'
+            : 'API 返回的内容不是 JSON 或事件流，请检查 Chat Completions 地址（通常为 /v1/chat/completions）。',
         );
       }
       if (!response.body) throw new Error('API 返回了空响应。');
