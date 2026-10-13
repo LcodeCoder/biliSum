@@ -75,12 +75,12 @@ test('map renderer supports all appearances and preserves the light default', ()
   const light = renderMindMapSvg(tree);
   const dark = renderMindMapSvg(tree, 'dark');
   assert.equal(light, renderMindMapSvg(tree, 'light'));
-  assert.ok(light.includes('fill="#f5f2ea"'));
+  assert.ok(light.includes('fill="#f5f6fa"'));
   const eye = renderMindMapSvg(tree, 'eye');
   assert.ok(eye.includes('fill="#eee7d9"'));
   assert.ok(eye.includes('fill="#302c24"'));
-  assert.ok(dark.includes('fill="#15130f"'));
-  assert.ok(dark.includes('fill="#ebe5d8"'));
+  assert.ok(dark.includes('fill="#151720"'));
+  assert.ok(dark.includes('fill="#edf0fa"'));
   assert.ok(light.includes('&lt;x&gt;') && dark.includes('&lt;x&gt;'));
   assert.equal(
     (light.match(/<path /g) || []).length,

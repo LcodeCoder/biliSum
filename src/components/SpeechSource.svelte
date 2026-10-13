@@ -10,6 +10,8 @@
   import { errorMessage, requestSignal } from '../lib/request';
   let {
     preferences,
+    open = $bindable(false),
+    online = true,
     busy,
     disabled,
     hasTranscript,
@@ -18,7 +20,9 @@
     onstart,
     onstop,
   }: {
+    online?: boolean;
     preferences: SpeechPreferences;
+    open?: boolean;
     busy: boolean;
     disabled: boolean;
     hasTranscript: boolean;
@@ -85,6 +89,9 @@
       if (mounted) installing = false;
     }
   }
+  $effect(() => {
+    open = !hasTranscript || busy;
+  });
   function chooseAudio(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -93,7 +100,7 @@
   }
 </script>
 
-<details class="speech-source" open={!hasTranscript || busy}>
+<details class="speech-source" bind:open>
   <summary
     ><Icon name="subtitles" size={15} /><span>从音频生成字幕</span><Icon
       name="chevron"
@@ -152,13 +159,13 @@
     {/if}
     {#if installNotice}<p role="status">{installNotice}</p>{/if}
     <div class="speech-actions">
-      {#if busy}<button class="outlined" onclick={onstop}
+      {#if busy}<button class="text-button" onclick={onstop}
           ><Icon name="stop" size={15} />停止识别</button
         >
       {:else}<button
-          class="outlined"
+          class="text-button primary-button"
           onclick={() => onstart()}
-          disabled={disabled || installing}
+          disabled={disabled || installing || !online}
           ><Icon name="sparkles" size={15} />{hasTranscript
             ? '重新识别音频'
             : '识别视频音频'}</button
@@ -178,12 +185,22 @@
       aria-label="选择音频文件"
       tabindex="-1"
     />
+    {#if !online && !busy}<p class="speech-capability">
+        联网后可获取视频音频。已缓存模型可用于识别导入的音频。
+      </p>{/if}
     {#if progress && busy}<div class="speech-progress" role="status">
         <Icon name="loader" size={14} /><span
           >{progress.message}{#if progress.percent !== undefined}
             · {progress.percent}%{/if}</span
         >
-      </div>{/if}
+      </div>
+      {#if progress.percent !== undefined}<progress
+          class="speech-progress-track"
+          value={progress.percent}
+          max="100"
+          aria-label="当前识别阶段进度">{progress.percent}%</progress
+        >{/if}
+    {/if}
     <p class="speech-limit">
       仅完整识别后启用生成。支持最多 4 小时、128 MB 音频；导入音频需与当前分 P
       时长一致。生成资源沿用现有 AI 配置。

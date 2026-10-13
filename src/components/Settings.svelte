@@ -109,7 +109,9 @@
       title="返回工作空间"><Icon name="back" size={19} /></button
     >
     <div>
+      <span class="pane-eyebrow">工作台配置</span>
       <h1>API 设置</h1>
+      <p class="settings-intro">连接你的 AI 服务，用字幕生成视频资料。</p>
     </div>
   </div>
   <form
@@ -213,19 +215,25 @@
             : '保存配置'}</span
       ><button
         type="button"
-        class="icon-button outlined"
+        class="text-button"
         onclick={test}
         disabled={!!busy}
         aria-label="测试 API 连接"
         title="测试 API 连接（发送一次简短请求）"
-        ><Icon name={busy === 'test' ? 'loader' : 'plug'} size={20} /></button
+        ><Icon
+          name={busy === 'test' ? 'loader' : 'plug'}
+          size={16}
+        />测试连接</button
       ><button
         type="submit"
-        class="icon-button primary"
+        class="text-button primary-button"
         disabled={!!busy}
         aria-label="保存 API 设置"
         title="保存 API 设置"
-        ><Icon name={busy === 'save' ? 'loader' : 'save'} size={20} /></button
+        ><Icon
+          name={busy === 'save' ? 'loader' : 'save'}
+          size={16}
+        />保存设置</button
       >
     </div>
   </form>

@@ -93,6 +93,7 @@
         <select
           class="form-control compact-control"
           aria-label="显示层级"
+          title="切换显示层级会重置展开状态；点击父节点可逐层展开或收起。"
           bind:value={depth}
         >
           <option value={1}>{selected ? '一级要点' : '主题概览'}</option>
@@ -136,17 +137,8 @@
       <MindMapOverview {tree} onfocus={focusBranch} />
     </div>
   </div>
-  {#if view === 'map'}
-    <p class="analysis-caption">
-      {selected
-        ? '当前主题：' + selected.title
-        : tree.children.length
-          ? '点击父节点逐层展开，再次点击收起。'
-          : '当前结果只有中心主题，没有下级条目。'}
-      {shownTree.children.length
-        ? '“+” 表示未展开条目；切换显示层级会重置展开状态。'
-        : ''}
-    </p>
+  {#if view === 'map' && !shownTree.children.length}
+    <p class="analysis-caption">当前结果只有中心主题，没有下级条目。</p>
   {:else if view === 'outline'}
     <p class="analysis-caption">
       {selected

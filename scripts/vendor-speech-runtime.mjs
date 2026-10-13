@@ -16,4 +16,9 @@ for (const name of names) await readFile(join(runtime, name));
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 for (const name of names) await cp(join(runtime, name), join(output, name));
+// WXT reads public assets when creating the ZIP; keep the bundled notice in sync.
+await cp(
+  join(root, 'THIRD_PARTY_NOTICES.md'),
+  join(root, 'public', 'THIRD_PARTY_NOTICES.md'),
+);
 console.log('Local speech runtime prepared.');

@@ -82,6 +82,10 @@ test('player endpoint falls back, includes cookies and preserves selected langua
           : {
               code: 0,
               data: {
+                aid: 170001,
+                bvid: 'BV1xx411c7mD',
+                cid: 102,
+                page_no: 2,
                 subtitle: {
                   subtitles: [
                     {
@@ -177,6 +181,10 @@ test('bad subtitle entries do not hide valid tracks and duplicate IDs are remove
         JSON.stringify({
           code: 0,
           data: {
+            aid: 170001,
+            bvid: 'BV1xx411c7mD',
+            cid: 102,
+            page_no: 2,
             subtitle: {
               subtitles: [
                 null,
@@ -225,7 +233,15 @@ test('malformed player and view responses report format errors, cancellation ski
     getSubtitleTracks(normalizeVideo(data, locator), {
       fetcher: (async () =>
         new Response(
-          JSON.stringify({ data: { subtitle: { subtitles: {} } } }),
+          JSON.stringify({
+            data: {
+              aid: 170001,
+              bvid: 'BV1xx411c7mD',
+              cid: 102,
+              page_no: 2,
+              subtitle: { subtitles: {} },
+            },
+          }),
         )) as typeof fetch,
     }),
     /列表格式异常/,
@@ -256,7 +272,16 @@ test('fallback metadata must contain the actual video identity and endpoint erro
           JSON.stringify(
             ++calls === 1
               ? { code: -101 }
-              : { code: 0, data: { subtitle: { subtitles: [] } } },
+              : {
+                  code: 0,
+                  data: {
+                    aid: 170001,
+                    bvid: 'BV1xx411c7mD',
+                    cid: 102,
+                    page_no: 2,
+                    subtitle: { subtitles: [] },
+                  },
+                },
           ),
         )) as typeof fetch,
     }),
@@ -281,5 +306,130 @@ test('cover hostname validation rejects query and credential tricks while allowi
       locator,
     ).cover,
     'https://i0.hdslb.com/bfs/cover.png?token=1',
+  );
+});
+
+test('subtitle responses from another video or part are rejected before subtitle download', async () => {
+  const video = normalizeVideo(data, locator);
+  const matching = {
+    aid: video.aid,
+    bvid: video.bvid,
+    cid: video.cid,
+    page_no: video.page,
+  };
+  for (const identity of [
+    {},
+    { ...matching, aid: 330107670 },
+    { ...matching, bvid: 'BV1gA411j7Ta' },
+    { ...matching, cid: 101 },
+    { ...matching, page_no: 1 },
+  ]) {
+    const calls: string[] = [];
+    await assert.rejects(
+      getSubtitleTracks(video, {
+        fetcher: (async (url, init) => {
+          calls.push(String(url));
+          assert.equal(init?.cache, 'no-store');
+          return new Response(
+            JSON.stringify({
+              code: 0,
+              data: {
+                ...identity,
+                subtitle: {
+                  subtitles: [
+                    {
+                      id_str: 'wrong',
+                      lan: 'zh-CN',
+                      subtitle_url: '//aisubtitle.hdslb.com/wrong.json',
+                    },
+                  ],
+                },
+              },
+            }),
+          );
+        }) as typeof fetch,
+      }),
+      /当前分 P 不一致/,
+    );
+    assert.equal(
+      calls.length,
+      2,
+      'only validated player fallbacks, no foreign subtitle fetch',
+    );
+  }
+});
+
+test('a stale player response can fall back to a matching source and tracks stay bound to that part', async () => {
+  const video = normalizeVideo(data, locator);
+  let requests = 0;
+  const fetcher = (async (url) => {
+    requests++;
+    const query = new URL(String(url)).searchParams;
+    assert.equal(query.get('bvid'), video.bvid);
+    assert.equal(query.get('cid'), String(video.cid));
+    return new Response(
+      JSON.stringify({
+        code: 0,
+        data: {
+          aid: video.aid,
+          bvid: video.bvid,
+          cid: requests === 1 ? 101 : video.cid,
+          page_no: video.page,
+          subtitle: {
+            subtitles: [
+              {
+                id: 1,
+                lan: 'zh-CN',
+                subtitle_url: '//aisubtitle.hdslb.com/correct.json',
+              },
+            ],
+          },
+        },
+      }),
+    );
+  }) as typeof fetch;
+  const [track] = await getSubtitleTracks(video, { fetcher });
+  assert.ok(track);
+  assert.deepEqual(track.video, {
+    aid: video.aid,
+    bvid: video.bvid,
+    cid: video.cid,
+    page: video.page,
+  });
+  let downloads = 0;
+  const subtitles = {
+    fetcher: (async () => {
+      downloads++;
+      return new Response(
+        JSON.stringify({
+          body: [{ from: 0, to: 19, content: '当前分 P 的数学课' }],
+        }),
+      );
+    }) as typeof fetch,
+  };
+  await assert.rejects(
+    getSubtitleCues(track, subtitles, { ...video, cid: 101 }),
+    /不属于当前视频/,
+  );
+  assert.equal(downloads, 0);
+  assert.equal(
+    (await getSubtitleCues(track, subtitles, video))[0]?.content,
+    '当前分 P 的数学课',
+  );
+  assert.equal(downloads, 1);
+  await assert.rejects(
+    getSubtitleCues(
+      track,
+      {
+        fetcher: (async () =>
+          new Response(
+            JSON.stringify({
+              body: [{ from: 18, to: 100, content: '不属于当前时长的字幕' }],
+            }),
+          )) as typeof fetch,
+      },
+      video,
+    ),
+    /时间超出/,
   );
 });

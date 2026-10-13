@@ -1,6 +1,9 @@
 <script lang="ts">
   let { name, size = 20 }: { name: string; size?: number } = $props();
   const paths: Record<string, string> = {
+    arrow: 'M5 12h14m-6-6 6 6-6 6',
+    up: 'm6 14 6-6 6 6',
+    offline: 'm2 2 20 20M8.5 8.5a8 8 0 0 1 9 1M5 12a11 11 0 0 1 5-2m-8-3a17 17 0 0 1 4-2m4-2a17 17 0 0 1 12 4M8 16a6 6 0 0 1 8 0M12 20h.01',
     list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
     chart: 'M4 4v16h17M8 8h11M8 12h7M8 16h9',
     expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',

@@ -1,6 +1,6 @@
-import { env, pipeline } from '@huggingface/transformers';
+import { env, pipeline, TextStreamer } from '@huggingface/transformers';
 import { SPEECH_MODEL, SPEECH_MODEL_REVISION } from './speech-model';
-import type { SpeechLanguage } from './speech-types';
+import { WHISPER_WINDOW_SECONDS, type SpeechLanguage } from './speech-types';
 
 const scope = self as unknown as {
   location: Location;
@@ -170,15 +170,31 @@ scope.onmessage = async (event) => {
       if (
         !(samples instanceof Float32Array) ||
         !samples.length ||
-        samples.length > 30 * 16_000 ||
+        samples.length > WHISPER_WINDOW_SECONDS * 16_000 ||
         !['zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'auto'].includes(language)
       )
         throw new Error('识别音频片段格式无效。');
+      // We own overlapping <=30s windows. Explicitly bound one decoder pass;
+      // Transformers' timestamp seek loop can repeatedly decode the padded tail.
+      // Require EOS so a token-limit result cannot become a complete transcript.
+      let ended = false;
+      const eos = transcriber.tokenizer.eos_token_id;
+      const streamer = new TextStreamer(transcriber.tokenizer, {
+        skip_prompt: true,
+        callback_function: () => {},
+        token_callback_function: (tokens) => {
+          if (tokens.some((token) => Number(token) === eos)) ended = true;
+        },
+      });
       const result = await transcriber(samples, {
+        max_new_tokens: 440,
+        streamer,
         return_timestamps: true,
         task: 'transcribe',
         ...(language === 'auto' ? {} : { language: languages[language] }),
       });
+      if (!ended)
+        throw new Error('当前音频片段解码未正常结束，未采用截断字幕。');
       scope.postMessage({ id, type: 'result', result });
     } else throw new Error('本地识别模型尚未准备好。');
   } catch (error) {

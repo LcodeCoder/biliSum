@@ -57,6 +57,7 @@ async function apiJson(
       credentials:
         new URL(url).hostname === 'api.bilibili.com' ? 'include' : 'omit',
       redirect: 'error',
+      cache: 'no-store',
       signal: request.signal,
     });
     if (!response.ok)
@@ -196,13 +197,27 @@ export async function getSubtitleTracks(
       const json = await apiJson(
         'https://api.bilibili.com' +
           path +
-          '?aid=' +
+          '?bvid=' +
+          video.bvid +
+          '&aid=' +
           video.aid +
           '&cid=' +
           video.cid,
         options,
       );
-      const list = json.data?.subtitle?.subtitles;
+      const identity = json.data;
+      if (
+        !identity ||
+        Number(identity.aid) !== video.aid ||
+        String(identity.bvid) !== video.bvid ||
+        Number(identity.cid) !== video.cid ||
+        (identity.page_no !== undefined &&
+          Number(identity.page_no) !== video.page)
+      )
+        throw new Error(
+          '字幕接口返回的视频与当前分 P 不一致，已拒绝加载。请刷新或改用音频识别。',
+        );
+      const list = identity.subtitle?.subtitles;
       if (list === undefined || (Array.isArray(list) && !list.length)) {
         continue;
       }
@@ -218,6 +233,12 @@ export async function getSubtitleTracks(
           if (ids.has(id)) continue;
           ids.add(id);
           tracks.push({
+            video: {
+              aid: video.aid,
+              bvid: video.bvid,
+              cid: video.cid,
+              page: video.page,
+            },
             id,
             language: String(item.lan || ''),
             label: String(item.lan_doc || item.lan || '字幕').slice(0, 100),
@@ -254,11 +275,27 @@ export function selectSubtitle(
 export async function getSubtitleCues(
   track: SubtitleTrack,
   options: ApiOptions = {},
+  video?: VideoInfo,
 ) {
+  if (
+    video &&
+    (!track.video ||
+      track.video.aid !== video.aid ||
+      track.video.bvid !== video.bvid ||
+      track.video.cid !== video.cid ||
+      track.video.page !== video.page)
+  )
+    throw new Error('这条字幕不属于当前视频分 P，已拒绝加载。请刷新字幕来源。');
   const json = await apiJson(normalizeSubtitleUrl(track.url), options);
   if (!Array.isArray(json.body))
     throw new Error('字幕内容格式异常，请刷新后重试。');
   const cues = normalizeCues(json.body);
   if (!cues.length) throw new Error('当前字幕为空，可切换语言或导入字幕文件。');
+  if (
+    video &&
+    video.duration > 0 &&
+    cues.some((cue) => cue.to > video.duration + 2)
+  )
+    throw new Error('字幕时间超出当前分 P，已拒绝加载。可刷新或改用音频识别。');
   return cues;
 }

@@ -252,6 +252,120 @@ test('timestamp ownership handles overlap and missing final end; invalid output 
   appendSpeechCues(cues, [{ from: 3, to: 4, content: '重复' }]);
   assert.equal(cues.length, 2, 'actual successive repetitions must remain');
 });
+test('Whisper padding timestamps are clipped to real audio, including the failing P3 window', () => {
+  const chunk = { from: 98, to: 127, coreFrom: 100, coreTo: 125 };
+  assert.deepEqual(
+    whisperCues(
+      {
+        text: '函数的对应关系',
+        chunks: [{ text: '函数的对应关系', timestamp: [26.32, 29.32] }],
+      },
+      chunk,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    whisperCues(
+      {
+        text: '函数的对应关系',
+        chunks: [{ text: '函数的对应关系', timestamp: [26.32, 29.32] }],
+      },
+      { ...chunk, coreTo: 127 },
+    ),
+    [{ from: 124.32, to: 127, content: '函数的对应关系' }],
+  );
+  assert.deepEqual(
+    whisperCues(
+      {
+        text: '最后一句 补零区域',
+        chunks: [
+          { text: '最后一句', timestamp: [3.8, 5.2] },
+          { text: '补零区域', timestamp: [7, null] },
+        ],
+      },
+      { from: 1800, to: 1804.484, coreFrom: 1800, coreTo: 1804.484 },
+    ),
+    [{ from: 1803.8, to: 1804.484, content: '最后一句' }],
+  );
+  assert.deepEqual(
+    whisperCues(
+      {
+        text: '结尾',
+        chunks: [{ text: '结尾', timestamp: [3.8, null] }],
+      },
+      { from: 1800, to: 1804.484, coreFrom: 1800, coreTo: 1804.484 },
+    ),
+    [{ from: 1803.8, to: 1804.484, content: '结尾' }],
+  );
+});
+test('clipping does not turn corrupt Whisper timestamps into completed subtitles', () => {
+  const chunk = { from: 0, to: 29, coreFrom: 0, coreTo: 29 };
+  for (const timestamp of [
+    [-1, 2],
+    [4, 3],
+    [0, 30.02],
+    [30.02, null],
+    [0, Infinity],
+    [NaN, 2],
+    [null, 2],
+  ]) {
+    assert.throws(
+      () =>
+        whisperCues(
+          {
+            text: '异常结果',
+            chunks: [
+              {
+                text: '异常结果',
+                timestamp: timestamp as [number | null, number | null],
+              },
+            ],
+          },
+          chunk,
+        ),
+      /时间/,
+    );
+  }
+  assert.throws(
+    () =>
+      whisperCues(
+        {
+          text: '异常结果',
+          chunks: [
+            { text: '异常结果', timestamp: [0, null] },
+            { text: '结尾', timestamp: [1, 2] },
+          ],
+        },
+        chunk,
+      ),
+    /时间/,
+  );
+});
+test('padded Whisper endings still require the entire audio before returning completion', async () => {
+  const { deps, stats } = fixture();
+  deps.whisper = () => ({
+    init: async () => true,
+    transcribe: async () => ({
+      text: '有效内容',
+      chunks: [{ text: '有效内容', timestamp: [0, 1.32] }],
+    }),
+    dispose() {
+      stats.workerDisposed++;
+    },
+  });
+  const output = await run(deps, { ...preferences, engine: 'whisper' });
+  assert.equal(output.complete, true);
+  assert.equal(output.duration, 2);
+  assert.equal(output.transcript.cues.at(-1)?.to, 2);
+  assert.equal(stats.audioDisposed, 1);
+  assert.equal(stats.workerDisposed, 1);
+  const incomplete = fixture([[0, 1]]);
+  incomplete.deps.whisper = deps.whisper;
+  await assert.rejects(
+    run(incomplete.deps, { ...preferences, engine: 'whisper' }),
+    /结尾/,
+  );
+});
 class FakeWorker extends EventTarget {
   sent: any[] = [];
   terminated = 0;

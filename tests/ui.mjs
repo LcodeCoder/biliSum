@@ -13,10 +13,10 @@ const appearances = [
   {
     value: 'light',
     label: '浅色模式',
-    background: '#f5f2ea',
-    surface: '#fdfbf6',
-    text: '#1f1c17',
-    tableLine: '#bbae9b',
+    background: '#f5f6fa',
+    surface: '#ffffff',
+    text: '#202333',
+    tableLine: '#b7bfd2',
   },
   {
     value: 'eye',
@@ -29,10 +29,10 @@ const appearances = [
   {
     value: 'dark',
     label: '深色模式',
-    background: '#15130f',
-    surface: '#1c1a15',
-    text: '#ebe5d8',
-    tableLine: '#665d4f',
+    background: '#151720',
+    surface: '#1c1f2b',
+    text: '#edf0fa',
+    tableLine: '#626d89',
   },
 ];
 const rgb = (hex) =>
@@ -103,7 +103,11 @@ async function scenario(
     await page
       .getByRole('button', { name: '生成 Markdown 总结', exact: true })
       .waitFor();
-    if (!query.includes('speech='))
+    if (
+      !query.includes('speech=') &&
+      !query.includes('subtitleIdentity=') &&
+      !/mode=(?:empty|unsupported)/.test(query)
+    )
       await page.waitForFunction(
         () =>
           !document.querySelector('[aria-label="生成 Markdown 总结"]').disabled,
@@ -147,23 +151,26 @@ test('language failure rolls back selection and keeps subtitles and completed su
   scenario(async (page) => {
     await generate(page);
     const summary = await page.locator('.markdown-body').innerText();
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     const original = await page.locator('.cue-list').innerText();
     await fault(page, { language: true });
-    await page.getByLabel('字幕语言').selectOption('en');
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('en');
     await page
       .getByRole('alert')
       .filter({ hasText: '已保留原字幕和结果' })
       .waitFor();
-    assert.equal(await page.getByLabel('字幕语言').inputValue(), 'zh');
+    assert.equal(
+      await page.getByLabel('字幕来源', { exact: true }).inputValue(),
+      'zh',
+    );
     assert.equal(await page.locator('.cue-list').innerText(), original);
     await page
-      .getByRole('button', { name: 'Markdown 总结页面', exact: true })
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
       .click();
     assert.equal(await page.locator('.markdown-body').innerText(), summary);
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     await fault(page, { language: false });
-    await page.getByLabel('字幕语言').selectOption('en');
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('en');
     await page
       .locator('.cue-list')
       .getByText(/English:/)
@@ -214,7 +221,7 @@ test('truncated summary remains downloadable as an incomplete draft without over
     await page.reload();
     await ready(page);
     await page
-      .getByRole('button', { name: 'Markdown 总结页面', exact: true })
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
       .click();
     assert.equal(await page.locator('.markdown-body').innerText(), full);
   }));
@@ -240,7 +247,7 @@ test('stop retains partial text and switching parts never shows a stale result',
     await page.waitForFunction(() => window.__biliSumFixture.stats.ai === 2);
     await page.locator('.summary-document.drafting').waitFor();
     await page.evaluate(() => window.__biliSumFixture.switchPage(2));
-    await page.locator('.part-label').filter({ hasText: 'P2' }).waitFor();
+    await page.locator('.setup-summary').filter({ hasText: 'P2' }).waitFor();
     await ready(page);
     assert.equal(await page.locator('.draft-notice').count(), 0);
     assert.equal(
@@ -365,7 +372,9 @@ test('HTML API responses give endpoint guidance and preserve existing resources 
     );
     await page.getByRole('button', { name: '返回工作空间' }).click();
     assert.equal(await page.locator('.markdown-body').innerText(), original);
-    await page.getByRole('button', { name: '重新生成', exact: true }).click();
+    await page
+      .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+      .click();
     await page.getByRole('alert').filter({ hasText: '网页' }).waitFor();
     assert.equal(await page.locator('.markdown-body').innerText(), original);
     assert.equal(
@@ -416,7 +425,7 @@ test('cancelled permission prompt cannot start a model request or save settings'
 
 test('invalid imports preserve subtitles; switching source resets a stale search', async () =>
   scenario(async (page) => {
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     const original = await page.locator('.cue-list').innerText();
     await page.getByLabel('选择字幕文件').setInputFiles({
       name: 'bad.json',
@@ -426,7 +435,7 @@ test('invalid imports preserve subtitles; switching source resets a stale search
     await page.getByRole('alert').filter({ hasText: 'body 数组' }).waitFor();
     assert.equal(await page.locator('.cue-list').innerText(), original);
     await page.getByLabel('搜索字幕内容').fill('no-match');
-    await page.getByLabel('字幕语言').selectOption('en');
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('en');
     await ready(page);
     assert.equal(await page.getByLabel('搜索字幕内容').inputValue(), '');
     await page.getByLabel('选择字幕文件').setInputFiles({
@@ -722,7 +731,7 @@ test('all appearances fit narrow headers, persist and match Markdown, map and do
           const { text } = await downloadHtml(page);
           assert.equal(text, preview);
           await page
-            .getByRole('button', { name: 'Markdown 总结页面', exact: true })
+            .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
             .click();
           assert.equal(
             await page.locator('.markdown-body').innerText(),
@@ -744,7 +753,7 @@ test('all appearances fit narrow headers, persist and match Markdown, map and do
             rgb(appearance.tableLine),
           );
           await page
-            .getByRole('button', { name: '思维导图页面', exact: true })
+            .getByRole('tab', { name: '思维导图页面', exact: true })
             .click();
           assert.equal(
             await page.locator('.map-drawing svg > rect').getAttribute('fill'),
@@ -1446,7 +1455,7 @@ test('distribution uses actual node counts, topic navigation and theme changes p
       camera,
     );
     assert.ok(
-      (await page.locator('.map-drawing').innerHTML()).includes('#15130f'),
+      (await page.locator('.map-drawing').innerHTML()).includes('#151720'),
     );
     await page.getByRole('button', { name: '护眼模式', exact: true }).click();
     assert.equal(
@@ -1566,7 +1575,7 @@ test('dropdowns and compound inputs share styles without clipping in narrow, wid
           const check = (controls, height) => {
             assert.ok(controls.length);
             for (const control of controls) {
-              assert.equal(control.radius, '8px');
+              assert.equal(control.radius, '7px');
               assert.equal(control.font, '12px');
               assert.equal(control.height, height);
               assert.equal(control.border, 'solid');
@@ -1586,9 +1595,11 @@ test('dropdowns and compound inputs share styles without clipping in narrow, wid
             ),
           );
           await page
-            .getByRole('button', { name: '字幕页面', exact: true })
+            .getByRole('tab', { name: '字幕页面', exact: true })
             .click();
-          const subtitleControls = await metrics(page.getByLabel('字幕语言'));
+          const subtitleControls = await metrics(
+            page.getByLabel('字幕来源', { exact: true }),
+          );
           check(subtitleControls, 32);
           assert.equal(subtitleControls[0].color, mapControls[0].color);
           assert.equal(
@@ -1947,9 +1958,7 @@ test('524 communicates incomplete delivery and fee risk while retaining a downlo
   }));
 
 const openHtml = async (page) => {
-  await page
-    .getByRole('button', { name: 'HTML 阅读页页面', exact: true })
-    .click();
+  await page.getByRole('tab', { name: 'HTML 阅读页页面', exact: true }).click();
 };
 const reportFrame = (page) => page.frameLocator('.html-preview');
 const previewHtml = async (page) => {
@@ -2056,7 +2065,7 @@ test('HTML independently requests AI from subtitles, without generating Markdown
       null,
     );
     await page
-      .getByRole('button', { name: 'Markdown 总结页面', exact: true })
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
       .click();
     assert.equal(
       await page
@@ -2064,9 +2073,7 @@ test('HTML independently requests AI from subtitles, without generating Markdown
         .isEnabled(),
       false,
     );
-    await page
-      .getByRole('button', { name: '思维导图页面', exact: true })
-      .click();
+    await page.getByRole('tab', { name: '思维导图页面', exact: true }).click();
     assert.equal(
       await page.getByRole('button', { name: '下载 SVG 思维导图' }).isEnabled(),
       false,
@@ -2304,9 +2311,7 @@ test('HTML themes, long-form contents, table grids and focus reading work locall
             }
           }
         }
-        await page
-          .getByRole('button', { name: '字幕页面', exact: true })
-          .click();
+        await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
         await openHtml(page);
         await waitHtml(page);
         assert.equal(
@@ -2561,7 +2566,7 @@ test('HTML preview resources are released and a local preview failure recovers w
     await waitReportAttribute(page, 'data-theme', 'blueprint');
     assert.equal(await page.locator('.html-error').count(), 0);
     const activeUrl = await page.locator('.html-preview').getAttribute('src');
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     assert.equal(
       await page.evaluate(async (url) => {
         try {
@@ -2591,7 +2596,9 @@ test('HTML cancellation stops requests, keeps complete results and never shows a
       () => window.__biliSumFixture.stats.waitingCompletion,
     );
     assert.equal(
-      await page.getByRole('button', { name: '用 AI 生成阅读页' }).isEnabled(),
+      await page
+        .getByRole('button', { name: '生成 HTML 阅读页', exact: true })
+        .isEnabled(),
       false,
     );
     assert.equal(
@@ -2663,12 +2670,44 @@ test('no subtitles: real WAV decoding, Whisper transcript and all generated reso
       );
       assert.match(
         await page.locator('.source-notice').innerText(),
-        /已恢复完整/,
+        /已恢复当前分 P 的完整本地识别字幕/,
       );
     },
     '&speech=whisper&theme=dark',
     { width: 280, height: 950 },
   ));
+
+test('Whisper padding at the audio end still enables SRT and resource generation', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await fault(page, { speech: 'padding' });
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /完整音频识别完成/,
+    );
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    const event = page.waitForEvent('download');
+    await page
+      .getByRole('button', { name: '下载 SRT 字幕', exact: true })
+      .click();
+    const download = await event;
+    const srt = await readFile(await download.path(), 'utf8');
+    assert.match(srt, /00:00:00,000 --> 00:00:02,000/);
+    await page
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+      .click();
+    await generate(page);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '下载 Markdown 总结', exact: true })
+        .isEnabled(),
+      true,
+    );
+  }, '&speech=whisper'));
 
 test('speech cancellation and part switch reject partial and stale transcripts', async () =>
   scenario(async (page) => {
@@ -2706,7 +2745,7 @@ test('speech cancellation and part switch reject partial and stale transcripts',
       .getByRole('button', { name: '识别视频音频', exact: true })
       .click();
     await ready(page);
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     assert.match(await page.locator('.cue-list').innerText(), /P2: 从音频/);
   }, '&speech=whisper&theme=eye'));
 
@@ -2750,7 +2789,7 @@ test('native speech uses explicit local audio and offers TXT without fabricated 
       await page.locator('.source-notice').innerText(),
       /精确时间轴/,
     );
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     assert.equal(
       await page
         .getByRole('button', { name: '下载 TXT 字幕', exact: true })
@@ -2780,7 +2819,7 @@ test('native failure in automatic mode restarts with Whisper and returns precise
       ]),
       [1, 1],
     );
-    await page.getByRole('button', { name: '字幕页面', exact: true }).click();
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
     assert.match(await page.locator('.cue-list').innerText(), /从音频识别/);
     assert.equal(
       await page
@@ -2840,3 +2879,471 @@ test('importing wrong-part audio rejects duration mismatch while preserving comp
       0,
     );
   }, '&speech=ready'));
+
+test('subtitles from another video or part cannot be downloaded or enable generation; refresh recovers and preserves valid results', async () => {
+  for (const identity of ['video', 'part']) {
+    await scenario(async (page) => {
+      await ready(page);
+      await page
+        .getByRole('alert')
+        .filter({ hasText: '当前分 P 不一致' })
+        .waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => window.__biliSumFixture.stats.subtitleDownloads,
+        ),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+          .isEnabled(),
+        false,
+      );
+      await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+      assert.equal(await page.locator('.cue-row').count(), 0);
+      await page
+        .getByRole('button', { name: '从音频生成字幕', exact: true })
+        .click();
+      assert.equal(
+        await page.locator('.speech-source').getAttribute('open'),
+        '',
+      );
+      assert.equal(
+        await page
+          .getByRole('button', { name: '识别视频音频', exact: true })
+          .isVisible(),
+        true,
+      );
+      await fault(page, { subtitleIdentity: '' });
+      await page.getByRole('button', { name: '刷新当前视频和字幕' }).click();
+      await ready(page);
+      assert.equal(await page.locator('.cue-row').count(), 7);
+      await generate(page);
+      const summary = await page.locator('.markdown-body').innerText();
+      const downloads = await page.evaluate(
+        () => window.__biliSumFixture.stats.subtitleDownloads,
+      );
+      await fault(page, { subtitleIdentity: identity });
+      await page.getByRole('button', { name: '刷新当前视频和字幕' }).click();
+      await ready(page);
+      await page
+        .getByRole('alert')
+        .filter({ hasText: '已保留原字幕和结果' })
+        .waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => window.__biliSumFixture.stats.subtitleDownloads,
+        ),
+        downloads,
+      );
+      assert.equal(await page.locator('.markdown-body').innerText(), summary);
+      await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+      assert.equal(await page.locator('.cue-row').count(), 7);
+    }, '&subtitleIdentity=' + identity);
+  }
+});
+
+test('resource tabs support keyboard navigation and correct panel labels without model calls', async () =>
+  scenario(async (page) => {
+    const map = page.getByRole('tab', { name: '思维导图页面', exact: true });
+    await map.press('ArrowRight');
+    const summary = page.getByRole('tab', {
+      name: 'Markdown 总结页面',
+      exact: true,
+    });
+    assert.equal(await summary.getAttribute('aria-selected'), 'true');
+    const panel = page.getByRole('tabpanel');
+    assert.equal(await panel.count(), 1);
+    assert.equal(
+      await panel.getAttribute('id'),
+      await summary.getAttribute('aria-controls'),
+    );
+    assert.equal(
+      await panel.getAttribute('aria-labelledby'),
+      await summary.getAttribute('id'),
+    );
+    await summary.press('End');
+    const subtitles = page.getByRole('tab', { name: '字幕页面', exact: true });
+    assert.equal(await subtitles.getAttribute('aria-selected'), 'true');
+    await page.getByLabel('搜索字幕内容').fill('不存在的关键词');
+    await page
+      .getByRole('button', { name: '查看全部字幕', exact: true })
+      .click();
+    assert.equal(await page.getByLabel('搜索字幕内容').inputValue(), '');
+    assert.equal(await page.locator('.cue-row').count(), 7);
+    await subtitles.press('Home');
+    assert.equal(await map.getAttribute('aria-selected'), 'true');
+    await page
+      .getByRole('tab', { name: 'HTML 阅读页页面', exact: true })
+      .click();
+    await page.getByRole('button', { name: '打开 API 设置' }).click();
+    await page.getByRole('button', { name: '返回工作空间' }).click();
+    assert.equal(
+      await page
+        .getByRole('tab', { name: 'HTML 阅读页页面', exact: true })
+        .getAttribute('aria-selected'),
+      'true',
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.ai),
+      0,
+    );
+  }));
+
+test('Markdown chapter search locates a real heading, handles no match and returns to the top without model calls', async () =>
+  scenario(
+    async (page) => {
+      await generate(page);
+      const heading = page.locator('.markdown-body h2').last();
+      const title = await heading.innerText();
+      await page.getByLabel('查找笔记章节').fill(title);
+      const select = page.getByLabel('跳转笔记章节');
+      const index = await select.locator('option').last().getAttribute('value');
+      await select.selectOption(index);
+      assert.equal(
+        await page.evaluate(() => document.activeElement?.textContent),
+        title,
+      );
+      assert.ok(
+        await page
+          .locator('.panel-content')
+          .evaluate((element) => element.scrollTop > 0),
+      );
+      await page.getByLabel('查找笔记章节').fill('没有这个章节');
+      assert.equal(await select.isEnabled(), false);
+      await page
+        .getByRole('button', { name: '清空章节搜索', exact: true })
+        .click();
+      assert.equal(await select.isEnabled(), true);
+      await page
+        .getByRole('button', { name: '返回笔记顶部', exact: true })
+        .click();
+      assert.equal(
+        await page
+          .locator('.panel-content')
+          .evaluate((element) => element.scrollTop),
+        0,
+      );
+      assert.equal(
+        await page.evaluate(() => document.activeElement?.textContent),
+        await page.locator('.markdown-body :is(h1,h2,h3)').first().innerText(),
+      );
+      assert.equal(
+        await page.evaluate(() => window.__biliSumFixture.stats.ai),
+        1,
+      );
+    },
+    '&theme=dark',
+    { width: 380, height: 650 },
+  ));
+
+test('offline workbench preserves complete resources, allows local downloads and resumes only on user action', async () =>
+  scenario(
+    async (page, context) => {
+      await generate(page);
+      const summary = await page.locator('.markdown-body').innerText();
+      await generateMap(page);
+      await page
+        .getByRole('button', { name: '生成 HTML 阅读页', exact: true })
+        .click();
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('[aria-label="下载 HTML 阅读页"]').disabled,
+      );
+      const calls = await page.evaluate(() => window.__biliSumFixture.stats.ai);
+      await context.setOffline(true);
+      await page.getByRole('status').filter({ hasText: '当前离线' }).waitFor();
+      for (const name of [
+        '生成思维导图',
+        '生成 Markdown 总结',
+        '生成 HTML 阅读页',
+      ])
+        assert.equal(
+          await page.getByRole('button', { name, exact: true }).isEnabled(),
+          false,
+        );
+      await page
+        .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+        .click();
+      assert.equal(await page.locator('.markdown-body').innerText(), summary);
+      const downloadPromise = page.waitForEvent('download');
+      await page
+        .getByRole('button', { name: '下载 Markdown 总结', exact: true })
+        .click();
+      const download = await downloadPromise;
+      assert.match(await readFile(await download.path(), 'utf8'), /知识/);
+      await context.setOffline(false);
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('[aria-label="生成 Markdown 总结"]').disabled,
+      );
+      assert.equal(
+        await page.evaluate(() => window.__biliSumFixture.stats.ai),
+        calls,
+      );
+      await page
+        .getByRole('tab', { name: '思维导图页面', exact: true })
+        .click();
+      assert.equal(await page.locator('.mindmap-workspace').isVisible(), true);
+      await page
+        .getByRole('tab', { name: 'HTML 阅读页页面', exact: true })
+        .click();
+      assert.equal(await page.locator('.html-preview').isVisible(), true);
+    },
+    '',
+    { width: 720, height: 850 },
+  ));
+
+test('empty and unsupported video states give working preparation actions in a short narrow workbench', async () => {
+  await scenario(
+    async (page) => {
+      await ready(page);
+      await page.getByRole('button', { name: '准备字幕', exact: true }).click();
+      await page
+        .getByRole('button', { name: '从音频生成字幕', exact: true })
+        .click();
+      assert.equal(
+        await page
+          .getByRole('button', { name: '识别视频音频', exact: true })
+          .isVisible(),
+        true,
+      );
+      assert.equal(
+        await page
+          .getByRole('button', { name: '导入已有字幕', exact: true })
+          .isVisible(),
+        true,
+      );
+    },
+    '&mode=empty',
+    { width: 280, height: 600 },
+  );
+  await scenario(
+    async (page) => {
+      await ready(page);
+      assert.equal(
+        await page
+          .getByRole('button', { name: '生成思维导图', exact: true })
+          .isEnabled(),
+        false,
+      );
+      await page
+        .getByRole('button', { name: '重新读取当前页', exact: true })
+        .click();
+      await ready(page);
+      await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+      assert.equal(
+        await page
+          .getByRole('button', { name: '导入字幕文件', exact: true })
+          .isEnabled(),
+        false,
+      );
+      await page.getByText('打开一个 B 站视频', { exact: true }).waitFor();
+      assert.equal(
+        await page.evaluate(() => window.__biliSumFixture.stats.ai),
+        0,
+      );
+    },
+    '&mode=unsupported',
+    { width: 280, height: 600 },
+  );
+});
+
+test('map and HTML use the remaining workspace height in wide, narrow and focus reading layouts', async () => {
+  for (const viewport of [
+    { width: 1164, height: 1154 },
+    { width: 720, height: 850 },
+    { width: 380, height: 850 },
+  ]) {
+    await scenario(
+      async (page) => {
+        await generateMap(page);
+        const space = await page.locator('.panel-content').boundingBox();
+        const canvas = await page.locator('.map-viewport').boundingBox();
+        assert.ok(
+          canvas.height >= space.height * 0.6,
+          `map fills available height: ${canvas.height}/${space.height} at ${viewport.width}px`,
+        );
+        assert.ok(canvas.height >= (viewport.width >= 640 ? 400 : 190));
+        const normal = canvas.height;
+        await page
+          .getByRole('button', { name: '专注阅读导图', exact: true })
+          .click();
+        assert.ok(
+          (await page.locator('.map-viewport').boundingBox()).height >
+            normal + 70,
+        );
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('.app-header').isVisible(), true);
+        await page
+          .getByRole('button', { name: '生成 HTML 阅读页', exact: true })
+          .click();
+        await page.waitForFunction(
+          () =>
+            !document.querySelector('[aria-label="下载 HTML 阅读页"]').disabled,
+        );
+        const reading = await page.locator('.html-preview').boundingBox();
+        const readingSpace = await page.locator('.panel-content').boundingBox();
+        assert.ok(
+          reading.height >= readingSpace.height * 0.6,
+          `HTML fills available height: ${reading.height}/${readingSpace.height}`,
+        );
+      },
+      '',
+      viewport,
+    );
+  }
+});
+
+test('restored and refreshed local subtitles cannot be overwritten by newly available player tracks', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    const localText = await page.locator('.cue-list').innerText();
+    assert.match(localText, /从音频识别/);
+    await fault(page, {
+      networkSubtitles: true,
+      subtitleContent: '来自接口的其他视频对话',
+    });
+    await page
+      .getByRole('button', { name: '刷新当前视频和字幕', exact: true })
+      .click();
+    await ready(page);
+    assert.equal(
+      await page.getByLabel('字幕来源', { exact: true }).inputValue(),
+      'speech',
+    );
+    assert.equal(await page.locator('.cue-list').innerText(), localText);
+    assert.equal(
+      await page.evaluate(
+        () => window.__biliSumFixture.stats.subtitleDownloads,
+      ),
+      0,
+    );
+    await generate(page);
+    await page
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+      .click();
+    const localSummary = await page.locator('.markdown-body').innerText();
+    const reloadUrl = new URL(page.url());
+    reloadUrl.searchParams.set('subtitles', 'available');
+    reloadUrl.searchParams.set('subtitleContent', '来自接口的其他视频对话');
+    await page.goto(reloadUrl.href);
+    await ready(page);
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    assert.match(
+      await page.locator('.form-message.success').innerText(),
+      /当前分 P.*本地识别/,
+    );
+    assert.equal(
+      await page.getByLabel('字幕来源', { exact: true }).inputValue(),
+      'speech',
+    );
+    assert.equal(await page.locator('.cue-list').innerText(), localText);
+    assert.equal(
+      await page.evaluate(
+        () => window.__biliSumFixture.stats.subtitleDownloads,
+      ),
+      0,
+    );
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('zh');
+    await ready(page);
+    assert.match(
+      await page.locator('.cue-list').innerText(),
+      /来自接口的其他视频对话/,
+    );
+    assert.equal(
+      await page.locator('.form-message.success').count(),
+      0,
+      'network selection clears cached-source notice',
+    );
+    assert.equal(
+      await page.evaluate(
+        () => window.__biliSumFixture.stats.subtitleDownloads,
+      ),
+      1,
+    );
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('speech');
+    await ready(page);
+    assert.equal(await page.locator('.cue-list').innerText(), localText);
+    await page
+      .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+      .click();
+    assert.equal(
+      await page.locator('.markdown-body').innerText(),
+      localSummary,
+      'results restore only for the same transcript',
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.ai),
+      0,
+      'source selection makes no paid requests',
+    );
+    await page.evaluate(() => window.__biliSumFixture.switchPage(2));
+    await ready(page);
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    assert.equal(
+      await page.locator('#subtitle-language option[value="speech"]').count(),
+      0,
+    );
+    assert.match(await page.locator('.cue-list').innerText(), /P2:/);
+    assert.notEqual(await page.locator('.cue-list').innerText(), localText);
+  }, '&speech=whisper'));
+
+test('imported subtitles survive refresh and remain selectable until the video part changes', async () =>
+  scenario(async (page) => {
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    await page.getByLabel('选择字幕文件', { exact: true }).setInputFiles({
+      name: 'calculus.srt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(
+        '1\n00:00:00,000 --> 00:00:02,000\n映射与函数：这是导入的高数字幕。\n',
+      ),
+    });
+    await page.getByText('已导入 1 条字幕', { exact: true }).waitFor();
+    await ready(page);
+    const imported = await page.locator('.cue-list').innerText();
+    assert.match(imported, /映射与函数/);
+    const downloads = await page.evaluate(
+      () => window.__biliSumFixture.stats.subtitleDownloads,
+    );
+    await page
+      .getByRole('button', { name: '刷新当前视频和字幕', exact: true })
+      .click();
+    await ready(page);
+    assert.equal(
+      await page.getByLabel('字幕来源', { exact: true }).inputValue(),
+      'imported',
+    );
+    assert.equal(await page.locator('.cue-list').innerText(), imported);
+    assert.equal(
+      await page.evaluate(
+        () => window.__biliSumFixture.stats.subtitleDownloads,
+      ),
+      downloads,
+    );
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('zh');
+    await ready(page);
+    assert.doesNotMatch(
+      await page.locator('.cue-list').innerText(),
+      /映射与函数/,
+    );
+    await page.getByLabel('字幕来源', { exact: true }).selectOption('imported');
+    await ready(page);
+    assert.equal(await page.locator('.cue-list').innerText(), imported);
+    await page.evaluate(() => window.__biliSumFixture.switchPage(2));
+    await ready(page);
+    assert.equal(
+      await page.locator('#subtitle-language option[value="imported"]').count(),
+      0,
+    );
+    assert.doesNotMatch(
+      await page.locator('.cue-list').innerText(),
+      /映射与函数/,
+    );
+  }));

@@ -1,5 +1,5 @@
 import type { SubtitleCue } from './types';
-import type { SpeechAudioChunk } from './speech-types';
+import { WHISPER_WINDOW_SECONDS, type SpeechAudioChunk } from './speech-types';
 
 export interface WhisperResult {
   text: string;
@@ -15,6 +15,12 @@ export function whisperCues(
   if (!Array.isArray(result.chunks) || result.chunks.length > 2_000)
     throw new Error('本地模型未返回有效时间轴，未采用该片段。');
   const duration = chunk.to - chunk.from;
+  if (
+    !Number.isFinite(duration) ||
+    duration <= 0 ||
+    duration > WHISPER_WINDOW_SECONDS
+  )
+    throw new Error('本地模型音频片段时长无效，已停止识别。');
   const cues: SubtitleCue[] = [];
   for (let index = 0; index < result.chunks.length; index++) {
     const item = result.chunks[index]!;
@@ -27,7 +33,9 @@ export function whisperCues(
       throw new Error('本地模型返回的字幕片段格式异常。');
     const [start, finish] = item.timestamp;
     const end =
-      finish === null && index === result.chunks.length - 1 ? duration : finish;
+      finish === null && index === result.chunks.length - 1
+        ? WHISPER_WINDOW_SECONDS
+        : finish;
     if (
       typeof start !== 'number' ||
       typeof end !== 'number' ||
@@ -35,20 +43,24 @@ export function whisperCues(
       !Number.isFinite(end) ||
       start < 0 ||
       end < start ||
-      start > duration + 0.1 ||
-      end > duration + 0.1
+      start > WHISPER_WINDOW_SECONDS ||
+      end > WHISPER_WINDOW_SECONDS
     )
       throw new Error('本地模型返回的字幕时间无效，已停止识别。');
-    if (!item.text.trim() || end === start) continue;
-    const midpoint = chunk.from + (start + end) / 2;
+    // Whisper pads every input to 30 seconds, so valid timestamps can fall
+    // beyond the real samples. Clip to the audio and drop padding-only cues.
+    const clippedStart = Math.min(duration, start);
+    const clippedEnd = Math.min(duration, end);
+    if (!item.text.trim() || clippedEnd <= clippedStart) continue;
+    const midpoint = chunk.from + (clippedStart + clippedEnd) / 2;
     // Each overlapping window owns only its central interval.
     if (
       midpoint < chunk.coreFrom ||
       (midpoint >= chunk.coreTo && chunk.coreTo < chunk.to)
     )
       continue;
-    const from = Math.min(chunk.to, chunk.from + start);
-    const to = Math.min(chunk.to, chunk.from + end);
+    const from = Math.min(chunk.to, chunk.from + clippedStart);
+    const to = Math.min(chunk.to, chunk.from + clippedEnd);
     if (to > from) cues.push({ from, to, content: item.text.trim() });
   }
   return cues;

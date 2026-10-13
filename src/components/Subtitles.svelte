@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import WorkspaceEmpty from './WorkspaceEmpty.svelte';
   import { formatTime } from '../lib/transcript';
   import type { SubtitleTrack, Transcript } from '../lib/types';
 
@@ -7,8 +8,13 @@
     transcript,
     tracks,
     selected,
+    hasSpeech,
+    hasImported,
     loading,
     notice,
+    problem,
+    hasVideo,
+    onspeech,
     onselect,
     onimport,
     ondownload,
@@ -18,8 +24,13 @@
     transcript: Transcript | null;
     tracks: SubtitleTrack[];
     selected: string;
+    hasSpeech: boolean;
+    hasImported: boolean;
     loading: boolean;
     notice: string;
+    problem: boolean;
+    hasVideo: boolean;
+    onspeech: () => void;
     onselect: (id: string) => void;
     onimport: (file: File) => void;
     ondownload: (format: 'txt' | 'srt') => void;
@@ -113,7 +124,7 @@
       <button
         class="icon-button"
         onclick={() => fileInput.click()}
-        disabled={loading}
+        disabled={loading || !hasVideo}
         aria-label="导入字幕文件"
         title="导入 SRT、VTT、TXT 或 B 站 JSON 字幕"
         ><Icon name="upload" size={17} /></button
@@ -129,9 +140,9 @@
     aria-label="选择字幕文件"
     tabindex="-1"
   />
-  {#if tracks.length}
+  {#if tracks.length || hasSpeech || hasImported}
     <div class="language-row">
-      <label for="subtitle-language">字幕语言</label>
+      <label for="subtitle-language">字幕来源</label>
       <select
         class="form-control compact-control"
         id="subtitle-language"
@@ -139,13 +150,10 @@
         disabled={loading}
         onchange={(event) => onselect(event.currentTarget.value)}
       >
-        {#if selected === 'imported'}<option value="imported"
-            >已导入的字幕</option
-          >{/if}
-        {#if selected === 'speech'}<option value="speech">本地语音识别</option
-          >{/if}
+        {#if hasImported}<option value="imported">已导入的字幕</option>{/if}
+        {#if hasSpeech}<option value="speech">本地语音识别</option>{/if}
         {#each tracks as track (track.id)}<option value={track.id}
-            >{track.label}</option
+            >B 站 · {track.label}</option
           >{/each}
       </select>
     </div>
@@ -168,23 +176,36 @@
         title="清空搜索"><Icon name="x" size={14} /></button
       >{/if}
   </div>
-  {#if notice && transcript}<p class="form-message error" role="alert">
+  {#if notice && transcript}<p
+      class="form-message"
+      class:error={problem}
+      class:success={!problem}
+      role={problem ? 'alert' : 'status'}
+    >
       {notice}
     </p>{/if}
   {#if loading}
-    <div class="empty-state compact">
-      <span class="empty-icon"><Icon name="loader" size={25} /></span>
-      <h2>正在读取字幕</h2>
-    </div>
+    <WorkspaceEmpty
+      icon="subtitles"
+      title="正在准备字幕"
+      description="完整字幕准备好后，就可以搜索内容、跳转视频和生成资源。"
+      busy
+    />
   {:else if !transcript}
-    <div class="empty-state compact">
-      <span class="empty-icon"><Icon name="subtitles" size={27} /></span>
-      <h2>还没有字幕内容</h2>
-      <p>
-        {notice || '请在 B 站登录后刷新，或点击右上角的导入图标选择字幕文件。'}
-      </p>
-      <small>支持 SRT · VTT · TXT · JSON</small>
-    </div>
+    <WorkspaceEmpty
+      icon="subtitles"
+      title={hasVideo ? '先为这个视频准备字幕' : '打开一个 B 站视频'}
+      description={hasVideo
+        ? notice || '可以在本机识别视频音频，或导入已有的字幕文件。'
+        : notice || '在浏览器中打开视频，再回到这里整理内容。'}
+      action={hasVideo ? '从音频生成字幕' : ''}
+      onaction={onspeech}
+    />
+    {#if hasVideo}<div class="subtitle-import-action">
+        <button class="text-button" onclick={() => fileInput.click()}
+          ><Icon name="upload" size={14} />导入已有字幕</button
+        ><small>SRT · VTT · TXT · JSON</small>
+      </div>{/if}
   {:else}
     <div class="subtitle-source">
       <span>{transcript.source}</span><span
@@ -195,6 +216,10 @@
       <div class="empty-state compact">
         <Icon name="search" size={28} />
         <h2>没有找到匹配内容</h2>
+        <p>换一个关键词，或返回完整字幕继续浏览。</p>
+        <button class="text-button" onclick={() => search('')}
+          >查看全部字幕</button
+        >
       </div>
     {:else}
       <div class="cue-list">

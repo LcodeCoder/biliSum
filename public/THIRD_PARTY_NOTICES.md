@@ -87,3 +87,8 @@ Other dependencies retain their own licenses in their packages. All application 
 - Whisper Base ONNX model data is downloaded separately from `Xenova/whisper-base`, fixed revision `64da57285918e20ea79ea5c88eed7197933abaa8`; it is not embedded in the extension package. The model card declares Apache-2.0; the original OpenAI Whisper project uses MIT, included in `licenses/Whisper-MIT.txt`. Model source and conversion metadata: https://huggingface.co/Xenova/whisper-base/tree/64da57285918e20ea79ea5c88eed7197933abaa8.
 
 All speech executable JavaScript and WebAssembly are packaged locally. Only model data is fetched remotely. Browser-managed on-device speech language packs are provided by the browser and are not redistributed by biliSum. The audio workflow was studied from voice-over-translation; no source code from that project was copied.
+
+## Workbench controls
+
+- Bits UI 2.19.5 provides the Svelte resource tabs and their keyboard/focus behavior. It is distributed under MIT, copyright (c) 2023 Hunter Johnston. The full license is included in `licenses/Bits-UI-MIT.txt`.
+- @internationalized/date 3.10.1 is the fixed peer dependency used with Bits UI. It is distributed under Apache-2.0. The full license is included in `licenses/Internationalized-Date-Apache-2.0.txt`.

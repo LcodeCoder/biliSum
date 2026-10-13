@@ -5,6 +5,9 @@
   const speechMode = parameters.get('speech');
   const faults = {
     language: false,
+    subtitleIdentity: parameters.get('subtitleIdentity') || '',
+    networkSubtitles: parameters.get('subtitles') === 'available',
+    subtitleContent: parameters.get('subtitleContent') || '',
     subtitles: false,
     storage: false,
     stream: '',
@@ -25,6 +28,7 @@
     urls: [],
     kinds: [],
     waitingCompletion: false,
+    subtitleDownloads: 0,
     speechStarts: 0,
     speechTerminated: 0,
     nativeStarts: 0,
@@ -270,7 +274,7 @@
     runtime: {
       id: 'bilisum-fixture',
       getURL: (path) => location.origin + '/' + path,
-      getManifest: () => ({ version: '0.1.12' }),
+      getManifest: () => ({ version: '0.1.13' }),
       onInstalled: event('installed'),
       onStartup: event('startup'),
     },
@@ -371,7 +375,11 @@
                     chunks: [
                       {
                         text: 'P' + part + ': 从音频识别的完整知识内容。',
-                        timestamp: [0, message.samples.length / 16000],
+                        timestamp: [
+                          0,
+                          message.samples.length / 16000 +
+                            (fail === 'padding' ? 0.32 : 0),
+                        ],
                       },
                     ],
                   };
@@ -489,12 +497,23 @@
       return reply({
         code: 0,
         data: {
+          aid: fixtureVideo.aid,
+          bvid:
+            faults.subtitleIdentity === 'video'
+              ? 'BV2xx411c7mD'
+              : fixtureVideo.bvid,
+          cid:
+            faults.subtitleIdentity === 'part'
+              ? 999
+              : fixtureVideo.pages[currentPage - 1].cid,
+          page_no: currentPage,
           subtitle: {
             subtitles:
               mode === 'empty' ||
-              speechMode === 'whisper' ||
-              speechMode === 'native' ||
-              speechMode === 'real'
+              (!faults.networkSubtitles &&
+                (speechMode === 'whisper' ||
+                  speechMode === 'native' ||
+                  speechMode === 'real'))
                 ? []
                 : [
                     {
@@ -514,15 +533,25 @@
         },
       });
     if (url.includes('aisubtitle.hdslb.com/fixture-')) {
+      stats.subtitleDownloads++;
       if (faults.subtitles || (faults.language && url.includes('-en')))
         throw new TypeError('Failed to fetch');
       return reply({
         body: subtitles.map((cue) => ({
           ...cue,
+          ...(speechMode
+            ? {
+                from:
+                  (cue.from / 74) *
+                  fixtureVideo.pages[currentPage - 1].duration,
+                to:
+                  (cue.to / 74) * fixtureVideo.pages[currentPage - 1].duration,
+              }
+            : {}),
           content:
             (url.includes('-en') ? 'English: ' : '') +
             (currentPage === 2 ? 'P2: ' : '') +
-            cue.content,
+            (faults.subtitleContent || cue.content),
         })),
       });
     }

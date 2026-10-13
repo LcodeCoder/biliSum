@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { Tabs } from 'bits-ui';
+  import WorkspaceEmpty from '../../src/components/WorkspaceEmpty.svelte';
+  import SummaryNavigation from '../../src/components/SummaryNavigation.svelte';
   import { browser } from 'wxt/browser';
   import Icon from '../../src/components/Icon.svelte';
   import MindMapWorkspace from '../../src/components/MindMapWorkspace.svelte';
@@ -74,6 +77,37 @@
     VideoInfo,
   } from '../../src/lib/types';
 
+  let online = $state(true);
+  let summaryElement = $state<HTMLElement>();
+  const resources: {
+    kind: GenerationKind;
+    title: string;
+    description: string;
+    icon: string;
+    label: string;
+  }[] = [
+    {
+      kind: 'map',
+      title: '思维导图',
+      description: '梳理主题与知识连接',
+      icon: 'map',
+      label: '生成思维导图',
+    },
+    {
+      kind: 'summary',
+      title: 'Markdown 笔记',
+      description: '保留重点与详细解释',
+      icon: 'file',
+      label: '生成 Markdown 总结',
+    },
+    {
+      kind: 'html',
+      title: 'HTML 阅读页',
+      description: '整理成可离线阅读的页面',
+      icon: 'code',
+      label: '生成 HTML 阅读页',
+    },
+  ];
   let page = $state<'map' | 'summary' | 'html' | 'subtitles'>('map');
   let htmlLayout = $state<HtmlReportLayout>('sheet');
   let htmlTheme = $state<HtmlReportTheme>('paper');
@@ -97,8 +131,12 @@
   let tracks = $state<SubtitleTrack[]>([]);
   let selectedTrack = $state('');
   let transcript = $state<Transcript | null>(null);
+  let speechTranscript = $state<Transcript | null>(null);
+  let importedTranscript = $state<Transcript | null>(null);
   let loading = $state(true);
   let sourceNotice = $state('');
+  let sourceProblem = $state(false);
+  let speechSourceOpen = $state(false);
   let speechBusy = $state(false);
   let speechProgress = $state<SpeechProgress | null>(null);
   let speechPreferences = $state<SpeechPreferences>({
@@ -135,7 +173,12 @@
   let toastTimer: ReturnType<typeof setTimeout>;
   let disposed = false;
   const canGenerate = $derived(
-    settingsReady && !!video && !!transcript?.cues.length && !loading && !busy,
+    online &&
+      settingsReady &&
+      !!video &&
+      !!transcript?.cues.length &&
+      !loading &&
+      !busy,
   );
   const displayMarkdown = $derived(
     busy === 'summary' && streamDraft
@@ -164,6 +207,49 @@
       focusMode = false;
       focusButton?.focus({ preventScroll: true });
     }
+  }
+
+  function switchPage(value: string) {
+    if (!['map', 'summary', 'html', 'subtitles'].includes(value)) return;
+    page = value as typeof page;
+  }
+  function hasResource(kind: GenerationKind) {
+    return kind === 'map'
+      ? !!map
+      : kind === 'summary'
+        ? !!summary
+        : !!htmlResult;
+  }
+  function prepareSource() {
+    setupOpen = true;
+    if (!video) void syncCurrent(true);
+    else if (!transcript) page = 'subtitles';
+  }
+  async function prepareSpeechSource() {
+    setupOpen = true;
+    speechSourceOpen = true;
+    await tick();
+    const action = document.querySelector<HTMLButtonElement>(
+      '.speech-actions button',
+    );
+    action?.scrollIntoView({ block: 'nearest' });
+    action?.focus({ preventScroll: true });
+  }
+  function topSummary() {
+    summaryElement
+      ?.closest<HTMLElement>('.panel-content')
+      ?.scrollTo({ top: 0, behavior: 'instant' });
+    const heading = summaryElement?.querySelector<HTMLElement>('h1, h2, h3');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
+  }
+  function jumpSummary(index: number) {
+    const heading =
+      summaryElement?.querySelectorAll<HTMLElement>('h1, h2, h3')[index];
+    if (!heading) return;
+    heading.setAttribute('tabindex', '-1');
+    heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+    heading.focus({ preventScroll: true });
   }
 
   function persistPreferences() {
@@ -225,9 +311,12 @@
     speechProgress = null;
     error = '';
     sourceNotice = '';
+    sourceProblem = false;
     retryKind = null;
     if (!preserve) {
       transcript = null;
+      speechTranscript = null;
+      importedTranscript = null;
       summary = null;
       map = null;
       htmlResult = null;
@@ -318,9 +407,14 @@
         signal: source.signal,
       });
       if (!isCurrent(source.serial)) return;
-      if (video && video.cid !== currentVideo.cid) {
+      if (
+        video &&
+        (video.bvid !== currentVideo.bvid || video.cid !== currentVideo.cid)
+      ) {
         setupOpen = true;
         transcript = null;
+        speechTranscript = null;
+        importedTranscript = null;
         summary = null;
         map = null;
         htmlResult = null;
@@ -343,8 +437,9 @@
             cached &&
             (await acceptTranscript(cached.transcript, source.serial))
           ) {
+            speechTranscript = cached.transcript;
             selectedTrack = 'speech';
-            sourceNotice = '已恢复完整的本地识别字幕。';
+            sourceNotice = '已恢复当前分 P 的完整本地识别字幕。';
             await restoreResults(
               currentVideo,
               cached.transcript,
@@ -365,7 +460,19 @@
           list,
           tracks.find((item) => item.id === selectedTrack)?.language,
         );
-        if (!transcript) tracks = list;
+        tracks = list;
+        // Refresh the available sources, but only an explicit choice may replace
+        // a local transcript. Player tracks can appear after cache restoration.
+        if (
+          transcript &&
+          (selectedTrack === 'speech' || selectedTrack === 'imported')
+        ) {
+          sourceNotice ||=
+            selectedTrack === 'speech'
+              ? '已保留当前分 P 的本地识别字幕，可直接生成资源。'
+              : '已保留当前分 P 导入的字幕，可直接生成资源。';
+          return;
+        }
         if (!track) {
           sourceNotice = transcript
             ? selectedTrack === 'speech'
@@ -374,26 +481,35 @@
             : '当前视频没有返回可用字幕。可从上方识别视频音频，也可登录 B 站后刷新或导入已有字幕。';
           return;
         }
-        const cues = await getSubtitleCues(track, { signal: source.signal });
+        const cues = await getSubtitleCues(
+          track,
+          { signal: source.signal },
+          currentVideo,
+        );
         if (!isCurrent(source.serial)) return;
         const nextTranscript: Transcript = {
           cues,
           timed: true,
           source: track.label,
         };
-        tracks = list;
-        selectedTrack = track.id;
         if (!(await acceptTranscript(nextTranscript, source.serial))) return;
+        selectedTrack = track.id;
+        sourceNotice = '';
         await restoreResults(currentVideo, nextTranscript, source.serial);
       } catch (cause) {
-        if (isCurrent(source.serial) && !source.signal.aborted)
+        if (isCurrent(source.serial) && !source.signal.aborted) {
+          sourceProblem = true;
           sourceNotice =
             errorMessage(cause) +
             (transcript
               ? ' 已保留原字幕和结果。'
-              : ' 可刷新重试，或导入已有字幕。');
+              : ' 可刷新重试、识别音频或导入已有字幕。');
+        }
       } finally {
-        if (isCurrent(source.serial)) loading = false;
+        if (isCurrent(source.serial)) {
+          loading = false;
+          if (transcript && !preserve) setupOpen = false;
+        }
       }
     } catch (cause) {
       if (
@@ -405,6 +521,7 @@
       ) {
         error = errorMessage(cause);
         sourceNotice = error;
+        sourceProblem = true;
         loading = false;
       }
     }
@@ -427,6 +544,7 @@
     speechBusy = false;
     speechProgress = null;
     loading = false;
+    sourceProblem = false;
     sourceNotice = transcript
       ? '识别已停止，已保留原字幕和结果。'
       : '识别已停止，未采用部分视频内容。可重新开始。';
@@ -468,6 +586,7 @@
       );
       if (!isCurrent(source.serial) || source.signal.aborted) return;
       if (!(await acceptTranscript(output.transcript, source.serial))) return;
+      speechTranscript = output.transcript;
       selectedTrack = 'speech';
       sourceNotice = output.transcript.timed
         ? '完整音频识别完成，可生成资源、跳转时间和下载字幕。识别文字可能有误，请结合视频核对。'
@@ -482,12 +601,14 @@
         }
       }
     } catch (cause) {
-      if (isCurrent(source.serial) && !source.signal.aborted)
+      if (isCurrent(source.serial) && !source.signal.aborted) {
+        sourceProblem = true;
         sourceNotice =
           errorMessage(cause) +
           (transcript
             ? ' 已保留原字幕和结果。'
             : ' 未采用部分识别内容，可重试或导入音频。');
+      }
     } finally {
       if (isCurrent(source.serial)) {
         loading = false;
@@ -498,27 +619,51 @@
   }
 
   async function changeLanguage(id: string) {
+    const local =
+      id === 'speech'
+        ? speechTranscript
+        : id === 'imported'
+          ? importedTranscript
+          : null;
     const track = tracks.find((item) => item.id === id);
-    if (!track || !video || loading || (selectedTrack === id && transcript))
+    if (
+      (!local && !track) ||
+      !video ||
+      loading ||
+      (selectedTrack === id && transcript)
+    )
       return;
     const currentVideo = video;
     const previousTrack = selectedTrack;
     const source = startSource(true);
     selectedTrack = id;
     try {
-      const cues = await getSubtitleCues(track, { signal: source.signal });
-      if (!isCurrent(source.serial)) return;
-      const next: Transcript = { cues, timed: true, source: track.label };
+      const next: Transcript = local ?? {
+        cues: await getSubtitleCues(
+          track!,
+          { signal: source.signal },
+          currentVideo,
+        ),
+        timed: true,
+        source: track!.label,
+      };
       if (!(await acceptTranscript(next, source.serial))) return;
+      selectedTrack = id;
+      sourceNotice = local
+        ? id === 'speech'
+          ? '已切换到当前分 P 的本地识别字幕。'
+          : '已切换到当前分 P 导入的字幕。'
+        : '';
       await restoreResults(currentVideo, next, source.serial);
     } catch (cause) {
       if (isCurrent(source.serial) && !source.signal.aborted) {
         selectedTrack = previousTrack;
+        sourceProblem = true;
         sourceNotice =
           errorMessage(cause) +
           (transcript
-            ? ' 已保留原字幕和结果，可重新选择语言重试。'
-            : ' 可重新选择语言重试。');
+            ? ' 已保留原字幕和结果，可重新选择来源重试。'
+            : ' 可重新选择来源重试。');
       }
     } finally {
       if (isCurrent(source.serial)) loading = false;
@@ -536,20 +681,27 @@
     }
     const captured = sourceSerial;
     const attempt = ++importSerial;
+    let importSource: number | undefined;
     try {
       const next = importTranscript(await file.text(), file.name);
       if (!isCurrent(captured) || attempt !== importSerial || !video) return;
       const currentVideo = video;
-      const source = startSource();
-      transcript = next;
+      const source = startSource(true);
+      importSource = source.serial;
+      if (!(await acceptTranscript(next, source.serial))) return;
+      importedTranscript = next;
       selectedTrack = 'imported';
+      sourceNotice = '已使用为当前分 P 导入的字幕。';
       await restoreResults(currentVideo, next, source.serial);
       if (isCurrent(source.serial)) loading = false;
       if (isCurrent(source.serial))
         notify('已导入 ' + next.cues.length + ' 条字幕');
     } catch (cause) {
-      if (isCurrent(captured) && attempt === importSerial)
+      if (isCurrent(importSource ?? captured) && attempt === importSerial)
         error = errorMessage(cause);
+    } finally {
+      if (importSource !== undefined && isCurrent(importSource))
+        loading = false;
     }
   }
 
@@ -792,6 +944,13 @@
   }
 
   onMount(() => {
+    const syncConnection = () => {
+      online = navigator.onLine;
+      if (!online && busy) stopGeneration();
+    };
+    syncConnection();
+    window.addEventListener('online', syncConnection);
+    window.addEventListener('offline', syncConnection);
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const syncTheme = () => {
       systemTheme = media.matches ? 'dark' : 'light';
@@ -877,6 +1036,8 @@
     void syncCurrent();
     return () => {
       disposed = true;
+      window.removeEventListener('online', syncConnection);
+      window.removeEventListener('offline', syncConnection);
       media.removeEventListener('change', syncTheme);
       sourceController?.abort();
       generationController?.abort();
@@ -894,14 +1055,10 @@
 <div class="app-shell" class:focus-mode={focusMode}>
   <header class="app-header">
     <div class="brand">
-      <img
-        class="brand-mark"
-        src="/icons/128.png"
-        width="30"
-        height="30"
-        alt=""
-      />
-      <span>biliSum</span>
+      <span class="brand-mark"><Icon name="map" size={23} /></span>
+      <span class="brand-name"
+        >biliSum<span class="brand-caption">视频学习工作台</span></span
+      >
       <span class="version">{version}</span>
     </div>
     <div class="header-tools">
@@ -921,7 +1078,7 @@
           onclick={() => changeTheme('light')}
           aria-pressed={appearance === 'light'}
           aria-label="浅色模式"
-          title="浅色模式 · 暖纸色"><Icon name="sun" size={17} /></button
+          title="浅色模式"><Icon name="sun" size={17} /></button
         >
         <button
           class="icon-button small"
@@ -937,7 +1094,7 @@
           onclick={() => changeTheme('dark')}
           aria-pressed={appearance === 'dark'}
           aria-label="深色模式"
-          title="深色模式 · 暖棕灰"><Icon name="moon" size={17} /></button
+          title="深色模式"><Icon name="moon" size={17} /></button
         >
       </div>
       <button
@@ -962,432 +1119,562 @@
       />
     </main>
   {:else}
-    <details class="setup-section" bind:open={setupOpen}>
-      <summary class="setup-summary" aria-label="视频与生成设置">
-        <span class="setup-summary-text"
-          ><strong>{video ? video.title : '视频与生成设置'}</strong><span
-            >{setupOpen
-              ? '收起设置，留出阅读空间'
-              : '展开视频信息与生成设置'}{video && video.page > 1
-              ? ' · P' + video.page
-              : ''}</span
-          ></span
+    <Tabs.Root value={page} onValueChange={switchPage} loop class="workbench">
+      <aside class="workspace-source" aria-label="视频来源与资源">
+        <button
+          class="icon-button small source-refresh"
+          onclick={() => syncCurrent(true)}
+          disabled={loading}
+          aria-label="刷新当前视频和字幕"
+          title="刷新当前视频和字幕"
+          ><Icon name={loading ? 'loader' : 'refresh'} size={15} /></button
         >
-        <Icon name="chevron" size={16} />
-      </summary>
-      <div class="source-section">
-        <div class="section-eyebrow">
-          <span>当前视频</span><button
-            class="icon-button tiny"
-            onclick={() => syncCurrent(true)}
-            disabled={loading}
-            aria-label="刷新当前视频和字幕"
-            title="刷新当前视频和字幕"
-            ><Icon name={loading ? 'loader' : 'refresh'} size={15} /></button
-          >
-        </div>
-        {#if video}
-          <div class="video-card">
-            <div class="video-cover">
-              {#if video.cover}<img
-                  src={video.cover}
-                  alt=""
-                  referrerpolicy="no-referrer"
-                  onerror={(event) => {
-                    if (
-                      video &&
-                      video.cover === event.currentTarget.getAttribute('src')
-                    )
-                      video.cover = '';
-                  }}
-                />{:else}<Icon name="play" size={23} />{/if}<span
-                >{formatTime(video.duration)}</span
+        <details class="setup-section" bind:open={setupOpen}>
+          <summary class="setup-summary" aria-label="视频与生成设置">
+            <span class="source-step" aria-hidden="true">01</span>
+            <span class="setup-summary-text">
+              <strong
+                >{setupOpen
+                  ? '视频来源'
+                  : video
+                    ? video.title
+                    : '视频来源'}</strong
+              >
+              <span
+                >{loading
+                  ? speechBusy
+                    ? '正在识别音频'
+                    : '正在读取当前视频'
+                  : transcript
+                    ? `${transcript.cues.length} 条字幕已准备${video ? ' · P' + video.page : ''}`
+                    : video
+                      ? `P${video.page} · 准备字幕后即可生成`
+                      : '打开 B 站视频开始整理'}</span
+              >
+            </span>
+            <Icon name="chevron" size={16} />
+          </summary>
+          <div class="source-section">
+            <div class="section-eyebrow">
+              <span>{video ? video.bvid : '当前标签页'}</span><span
+                >当前视频</span
               >
             </div>
-            <div class="video-details">
-              <h2 title={video.title}>{video.title}</h2>
-              <p>
-                {video.owner || video.bvid}{#if video.part}<span>
-                    · P{video.page}</span
-                  >{/if}
-              </p>
+            {#if video}
+              <div class="video-card">
+                <div class="video-cover">
+                  {#if video.cover}<img
+                      src={video.cover}
+                      alt=""
+                      referrerpolicy="no-referrer"
+                      onerror={(event) => {
+                        if (
+                          video &&
+                          video.cover ===
+                            event.currentTarget.getAttribute('src')
+                        )
+                          video.cover = '';
+                      }}
+                    />{:else}<Icon name="play" size={23} />{/if}<span
+                    >{formatTime(video.duration)}</span
+                  >
+                </div>
+                <div class="video-details">
+                  <h2 title={video.title}>{video.title}</h2>
+                  <p>
+                    {video.owner || video.bvid}{#if video.part}<span>
+                        · P{video.page}</span
+                      >{/if}
+                  </p>
+                </div>
+              </div>
+              {#if video.part}<p class="part-label" title={video.part}>
+                  P{video.page} · {video.part}
+                </p>{/if}
+            {:else}
+              <div class="video-placeholder">
+                <Icon name={loading ? 'loader' : 'play'} size={23} />
+                <div>
+                  <strong>{loading ? '正在识别视频…' : '未识别到视频'}</strong>
+                  <p>{loading ? '读取当前标签页' : '请打开 B 站视频页'}</p>
+                </div>
+              </div>
+            {/if}
+            <div class="source-status" class:ready={!!transcript}>
+              <span class="status-dot"></span><span
+                >{loading
+                  ? speechBusy
+                    ? '正在识别完整视频音频…'
+                    : '正在获取视频字幕…'
+                  : transcript
+                    ? transcript.source +
+                      ' · ' +
+                      transcript.cues.length +
+                      ' 条字幕'
+                    : video
+                      ? '尚未获取字幕，可识别音频或导入字幕'
+                      : '在 B 站视频页使用'}</span
+              >
             </div>
           </div>
-          {#if video.part}<p class="part-label" title={video.part}>
-              P{video.page} · {video.part}
+          {#if video}
+            <SpeechSource
+              bind:open={speechSourceOpen}
+              {online}
+              preferences={speechPreferences}
+              busy={speechBusy}
+              disabled={loading || !!busy || !video}
+              hasTranscript={!!transcript}
+              progress={speechProgress}
+              onchange={changeSpeechPreferences}
+              onstart={beginSpeech}
+              onstop={stopSpeech}
+            />
+          {/if}
+          {#if sourceChunks > 1}<p class="source-notice">
+              字幕较长，将分 {sourceChunks} 段阅读后合并，首次至少需要 {sourceChunks +
+                1} 次请求。相同配置下可复用本次侧栏中已完成的笔记；每次最终生成仍按服务商规则计费，可随时停止。
             </p>{/if}
-        {:else}
-          <div class="video-placeholder">
-            <Icon name={loading ? 'loader' : 'play'} size={23} />
-            <div>
-              <strong>{loading ? '正在识别视频…' : '未识别到视频'}</strong>
-              <p>{loading ? '读取当前标签页' : '请打开 B 站视频页'}</p>
+          <div class="detail-control">
+            <div class="detail-heading">
+              <label for="summary-detail">总结细腻程度</label>
+              <output for="summary-detail">{detail.label}</output>
             </div>
+            <input
+              id="summary-detail"
+              type="range"
+              min="1"
+              max="5"
+              step="1"
+              value={settings.detailLevel}
+              disabled={!!busy}
+              aria-valuetext={detail.label}
+              title="用于下一次生成的思维导图、Markdown 总结和 HTML 阅读页"
+              style:--range-progress={(settings.detailLevel - 1) * 25 + '%'}
+              oninput={(event) => changeDetail(event.currentTarget.value)}
+              onchange={persistPreferences}
+            />
+            <div class="detail-range"><span>精简</span><span>详尽</span></div>
           </div>
-        {/if}
-        <div class="source-status" class:ready={!!transcript}>
-          <span class="status-dot"></span><span
-            >{loading
-              ? speechBusy
-                ? '正在识别完整视频音频…'
-                : '正在获取视频字幕…'
-              : transcript
-                ? transcript.source + ' · ' + transcript.cues.length + ' 条字幕'
-                : video
-                  ? '尚未获取字幕，可识别音频或导入字幕'
-                  : '在 B 站视频页使用'}</span
-          >
-        </div>
-      </div>
-      {#if video}
-        <SpeechSource
-          preferences={speechPreferences}
-          busy={speechBusy}
-          disabled={loading || !!busy || !video}
-          hasTranscript={!!transcript}
-          progress={speechProgress}
-          onchange={changeSpeechPreferences}
-          onstart={beginSpeech}
-          onstop={stopSpeech}
-        />
-      {/if}
-      {#if sourceChunks > 1}<p class="source-notice">
-          字幕较长，将分 {sourceChunks} 段阅读后合并，首次至少需要 {sourceChunks +
-            1} 次请求。相同配置下可复用本次侧栏中已完成的笔记；每次最终生成仍按服务商规则计费，可随时停止。
-        </p>{/if}
-      <div class="detail-control">
-        <div class="detail-heading">
-          <label for="summary-detail">总结细腻程度</label>
-          <output for="summary-detail">{detail.label}</output>
-        </div>
-        <input
-          id="summary-detail"
-          type="range"
-          min="1"
-          max="5"
-          step="1"
-          value={settings.detailLevel}
-          disabled={!!busy}
-          aria-valuetext={detail.label}
-          title="用于下一次生成的思维导图、Markdown 总结和 HTML 阅读页"
-          style:--range-progress={(settings.detailLevel - 1) * 25 + '%'}
-          oninput={(event) => changeDetail(event.currentTarget.value)}
-          onchange={persistPreferences}
-        />
-        <div class="detail-range"><span>精简</span><span>详尽</span></div>
-      </div>
-      <div class="generation-actions" aria-label="生成操作">
-        <div class="generation-card">
-          <strong>思维导图</strong>
-          <button
-            class="generate-button"
-            onclick={() => generate('map')}
-            disabled={!canGenerate}
-            aria-label="生成思维导图"
-            title="生成思维导图"><Icon name="map" size={21} /></button
-          >
-        </div>
-        <div class="generation-card">
-          <strong>Markdown</strong>
-          <button
-            class="generate-button"
-            onclick={() => generate('summary')}
-            disabled={!canGenerate}
-            aria-label="生成 Markdown 总结"
-            title="生成 Markdown 总结"><Icon name="file" size={21} /></button
-          >
-        </div>
-        <div class="generation-card">
-          <strong>HTML</strong>
-          <button
-            class="generate-button"
-            onclick={() => generate('html')}
-            disabled={!canGenerate}
-            aria-label="生成 HTML 阅读页"
-            title="AI 生成 HTML 阅读页"><Icon name="code" size={21} /></button
-          >
-        </div>
-      </div>
-      {#if settingsReady && !settings.apiKey && video && transcript && !busy}<div
-          class="setup-hint"
+          {#if settingsReady && !settings.apiKey && video && transcript && !busy}<div
+              class="setup-hint"
+            >
+              <Icon name="key" size={15} /><span>请先配置 API</span><button
+                class="icon-button tiny"
+                onclick={() => (showSettings = true)}
+                aria-label="配置 API Key"
+                title="配置 API Key"><Icon name="settings" size={16} /></button
+              >
+            </div>{/if}
+        </details>
+        <div
+          class="generation-actions"
+          class:source-collapsed={!setupOpen}
+          aria-label="生成操作"
         >
-          <Icon name="key" size={15} /><span>请先配置 API</span><button
-            class="icon-button tiny"
-            onclick={() => (showSettings = true)}
-            aria-label="配置 API Key"
-            title="配置 API Key"><Icon name="settings" size={16} /></button
+          <div class="resource-heading">
+            <span
+              ><span class="source-step" aria-hidden="true">02</span
+              >视频资源</span
+            ><span>选择并生成</span>
+          </div>
+          {#each resources as resource (resource.kind)}
+            <div
+              class="resource-row"
+              class:chosen={page === resource.kind}
+              class:complete={hasResource(resource.kind)}
+            >
+              <button
+                class="resource-select"
+                onclick={() => switchPage(resource.kind)}
+                aria-label={'查看' + resource.title}
+                aria-current={page === resource.kind ? 'page' : undefined}
+              >
+                <span class="resource-symbol"
+                  ><Icon name={resource.icon} size={19} /></span
+                >
+                <span class="resource-info"
+                  ><strong>{resource.title}</strong><span
+                    >{resource.description}</span
+                  ></span
+                >
+                <span
+                  class="resource-status"
+                  class:done={hasResource(resource.kind)}
+                  >{busy === resource.kind
+                    ? '生成中'
+                    : hasResource(resource.kind)
+                      ? '已完成'
+                      : transcript
+                        ? '可生成'
+                        : '待字幕'}</span
+                >
+              </button>
+              <button
+                class="generate-button"
+                onclick={() => generate(resource.kind)}
+                disabled={!canGenerate}
+                aria-label={resource.label}
+                title={hasResource(resource.kind)
+                  ? '重新' + resource.label
+                  : resource.label}
+                ><Icon
+                  name={busy === resource.kind
+                    ? 'loader'
+                    : hasResource(resource.kind)
+                      ? 'refresh'
+                      : 'plus'}
+                  size={17}
+                /><span class="generate-label"
+                  >{hasResource(resource.kind)
+                    ? '重做'
+                    : '生成'}{resource.kind === 'map'
+                    ? '导图'
+                    : resource.kind === 'summary'
+                      ? '笔记'
+                      : '阅读页'}</span
+                ></button
+              >
+            </div>
+          {/each}
+          <button
+            class="resource-subtitles"
+            onclick={() => switchPage('subtitles')}
+            aria-label="查看字幕来源"
+            ><Icon name="subtitles" size={16} /><span>字幕来源</span><span
+              >{transcript
+                ? transcript.cues.length + ' 条'
+                : '识别或导入'}</span
+            ><Icon name="arrow" size={14} /></button
+          >
+        </div>
+      </aside>
+      {#if !online}<div class="offline-banner" role="status">
+          <Icon name="offline" size={16} /><span
+            ><strong>当前离线</strong> 已完成的内容仍可阅读、复制和下载。联网后可继续生成。</span
           >
         </div>{/if}
-    </details>
-    {#if busy}<div class="generation-progress" role="status">
-        <Icon name="loader" size={17} /><span>{progress}</span><button
-          class="icon-button small"
-          onclick={() => stopGeneration()}
-          aria-label="停止生成"
-          title="停止生成"><Icon name="stop" size={15} /></button
+      {#if busy}<div class="generation-progress" role="status">
+          <Icon name="loader" size={17} /><span>{progress}</span><button
+            class="icon-button small"
+            onclick={() => stopGeneration()}
+            aria-label="停止生成"
+            title="停止生成"><Icon name="stop" size={15} /></button
+          >
+        </div>{/if}
+      {#if sourceNotice && page !== 'subtitles'}<div
+          class="source-notice"
+          class:problem={sourceProblem}
+          role={sourceProblem ? 'alert' : 'status'}
         >
-      </div>{/if}
-    {#if sourceNotice && page !== 'subtitles'}<div
-        class="source-notice"
-        role="status"
-      >
-        {sourceNotice}<button
-          class="text-button"
-          onclick={() => (page = 'subtitles')}>查看字幕</button
-        >
-      </div>{/if}
-    <nav class="page-nav" aria-label="工作空间页面">
-      <div class="nav-item" class:selected={page === 'map'}>
-        <button
-          class="nav-button"
-          aria-label="思维导图页面"
-          aria-pressed={page === 'map'}
-          title="思维导图"
-          onclick={() => (page = 'map')}
-          ><Icon name="map" size={20} /><span>思维导图</span></button
-        >
-      </div>
-      <div class="nav-item" class:selected={page === 'summary'}>
-        <button
-          class="nav-button"
-          aria-label="Markdown 总结页面"
-          aria-pressed={page === 'summary'}
-          title="Markdown 总结"
-          onclick={() => (page = 'summary')}
-          ><Icon name="file" size={20} /><span>Markdown</span></button
-        >
-      </div>
-      <div class="nav-item" class:selected={page === 'html'}>
-        <button
-          class="nav-button"
-          aria-label="HTML 阅读页页面"
-          aria-pressed={page === 'html'}
-          title="HTML 阅读页，可离线下载"
-          onclick={() => {
-            page = 'html';
-            if (htmlResult) setupOpen = false;
-          }}><Icon name="code" size={20} /><span>HTML</span></button
-        >
-      </div>
-      <div class="nav-item" class:selected={page === 'subtitles'}>
-        <button
-          class="nav-button"
-          aria-label="字幕页面"
-          aria-pressed={page === 'subtitles'}
-          title="视频字幕"
-          onclick={() => (page = 'subtitles')}
-          ><Icon name="subtitles" size={20} /><span>字幕</span></button
-        >
-      </div>
-    </nav>
-    {#if error}<div class="error-banner" role="alert">
-        <Icon name="alert" size={17} />
-        <p>{error}</p>
-        {#if retryKind}<button
+          {sourceNotice}<button
             class="text-button"
-            disabled={!canGenerate}
-            onclick={() => generate(retryKind!)}>重新生成</button
-          >{/if}
-        <button
-          class="icon-button tiny"
-          onclick={() => (error = '')}
-          aria-label="关闭错误提示"
-          title="关闭提示"><Icon name="x" size={14} /></button
+            onclick={() => (page = 'subtitles')}>查看字幕</button
+          >
+        </div>{/if}
+      <nav class="resource-nav" aria-label="工作空间页面">
+        <Tabs.List class="page-nav" aria-label="视频资源页面">
+          <Tabs.Trigger class="nav-button" value="map" aria-label="思维导图页面"
+            ><Icon name="map" size={17} /><span>导图</span>{#if map}<i
+                class="nav-ready"
+                aria-label="已生成"
+              ></i>{/if}</Tabs.Trigger
+          >
+          <Tabs.Trigger
+            class="nav-button"
+            value="summary"
+            aria-label="Markdown 总结页面"
+            ><Icon name="file" size={17} /><span>笔记</span>{#if summary}<i
+                class="nav-ready"
+                aria-label="已生成"
+              ></i>{/if}</Tabs.Trigger
+          >
+          <Tabs.Trigger
+            class="nav-button"
+            value="html"
+            aria-label="HTML 阅读页页面"
+            ><Icon name="code" size={17} /><span>阅读页</span>{#if htmlResult}<i
+                class="nav-ready"
+                aria-label="已生成"
+              ></i>{/if}</Tabs.Trigger
+          >
+          <Tabs.Trigger
+            class="nav-button"
+            value="subtitles"
+            aria-label="字幕页面"
+            ><Icon name="subtitles" size={17} /><span>字幕</span
+            >{#if transcript}<i class="nav-ready" aria-label="已准备"
+              ></i>{/if}</Tabs.Trigger
+          >
+        </Tabs.List>
+      </nav>
+      {#if error}<div class="error-banner" role="alert">
+          <Icon name="alert" size={17} />
+          <p>{error}</p>
+          {#if retryKind}<button
+              class="text-button"
+              disabled={!canGenerate}
+              onclick={() => generate(retryKind!)}>重新生成</button
+            >{/if}
+          <button
+            class="icon-button tiny"
+            onclick={() => (error = '')}
+            aria-label="关闭错误提示"
+            title="关闭提示"><Icon name="x" size={14} /></button
+          >
+        </div>{/if}
+      <main
+        class="panel-content"
+        class:map-content={page === 'map'}
+        class:html-content={page === 'html'}
+      >
+        <Tabs.Content
+          value={page}
+          class="workspace-page"
+          aria-label={page === 'map'
+            ? '思维导图详情'
+            : page === 'summary'
+              ? 'Markdown 笔记详情'
+              : page === 'html'
+                ? 'HTML 阅读页详情'
+                : '字幕详情'}
         >
-      </div>{/if}
-    <main
-      class="panel-content"
-      class:map-content={page === 'map'}
-      class:html-content={page === 'html'}
-    >
-      {#if page === 'map'}
-        <section class="map-pane" aria-label="思维导图">
-          <div class="pane-heading">
-            <h1>{focusMode ? '专注阅读' : '思维导图'}</h1>
-            <div class="toolbar">
-              <button
-                class="icon-button"
-                class:active={focusMode}
-                bind:this={focusButton}
-                onclick={() => (focusMode = !focusMode)}
-                disabled={!map}
-                aria-pressed={focusMode}
-                aria-label={focusMode ? '退出专注阅读' : '专注阅读导图'}
-                title={focusMode
-                  ? '退出专注阅读（Esc）'
-                  : '专注阅读，隐藏上方信息'}
-                ><Icon
-                  name={focusMode ? 'collapse' : 'expand'}
-                  size={18}
-                /></button
-              >
-              <button
-                class="icon-button"
-                onclick={() => downloadMap('svg')}
-                disabled={!map}
-                aria-label="下载 SVG 思维导图"
-                title="下载完整 SVG 思维导图（含未展开条目）"
-                ><Icon name="download" size={18} /></button
-              ><button
-                class="icon-button"
-                onclick={() => downloadMap('png')}
-                disabled={!map}
-                aria-label="下载 PNG 思维导图"
-                title="下载完整 PNG 思维导图（含未展开条目）"
-                ><Icon name="image" size={18} /></button
-              >
-            </div>
-          </div>
-          {#if map}
-            {#key map.tree}
-              <MindMapWorkspace
-                tree={map.tree}
-                theme={appearance}
-                ondownloadoutline={downloadOutline}
-              />
-            {/key}
-            <p class="result-meta">
-              {map.source} · {detailProfile(map.detailLevel).label}
-            </p>
-          {:else}
-            <div class="empty-state map-empty">
-              <span class="empty-icon"
-                ><Icon
-                  name={busy === 'map' ? 'loader' : 'map'}
-                  size={28}
-                /></span
-              >
-              <p>
-                {busy === 'map'
-                  ? '正在生成思维导图…'
-                  : !video
-                    ? '请先打开 B 站视频'
-                    : !transcript
-                      ? '请先获取或导入字幕'
-                      : '尚未生成思维导图'}
-              </p>
-            </div>
-          {/if}
-        </section>
-      {:else if page === 'summary'}
-        <section class="summary-pane" aria-label="Markdown 总结">
-          <div class="pane-heading">
-            <h1>Markdown</h1>
-            <div class="toolbar">
-              <button
-                class="icon-button"
-                class:active={rawMarkdown}
-                onclick={() => (rawMarkdown = !rawMarkdown)}
-                disabled={!displayMarkdown}
-                aria-pressed={rawMarkdown}
-                aria-label="切换 Markdown 源码"
-                title="切换预览 / Markdown 源码"
-                ><Icon name="code" size={17} /></button
-              ><button
-                class="icon-button"
-                onclick={copySummary}
-                disabled={!shownSummary || busy === 'summary'}
-                aria-label="复制 Markdown 总结"
-                title="复制 Markdown 总结"
-                ><Icon name="copy" size={17} /></button
-              ><button
-                class="icon-button"
-                onclick={downloadSummary}
-                disabled={!shownSummary || busy === 'summary'}
-                aria-label="下载 Markdown 总结"
-                title="下载 Markdown 总结 (.md)"
-                ><Icon name="download" size={18} /></button
-              >
-            </div>
-          </div>
-          {#if draft && busy !== 'summary'}<div
-              class="draft-notice"
-              role="status"
-            >
-              <p>
-                未完成草稿：生成已中断，以下内容不完整。可复制、下载或重新生成。
-              </p>
-              {#if summary}<button
-                  class="text-button"
-                  onclick={() => (draft = null)}>显示上次完整总结</button
-                >{/if}
-            </div>{/if}
-          {#if displayMarkdown}<article
-              class="summary-document"
-              class:drafting={busy === 'summary'}
-            >
-              {#if rawMarkdown}<pre
-                  class="markdown-source">{displayMarkdown}</pre>{:else}<div
-                  class="markdown-body"
+          {#if page === 'map'}
+            <section class="map-pane" aria-label="思维导图">
+              <div class="pane-heading">
+                <div>
+                  <span class="pane-eyebrow">知识结构</span>
+                  <h1>{focusMode ? '专注阅读' : '思维导图'}</h1>
+                </div>
+                <div class="toolbar">
+                  <button
+                    class="icon-button"
+                    class:active={focusMode}
+                    bind:this={focusButton}
+                    onclick={() => (focusMode = !focusMode)}
+                    disabled={!map}
+                    aria-pressed={focusMode}
+                    aria-label={focusMode ? '退出专注阅读' : '专注阅读导图'}
+                    title={focusMode
+                      ? '退出专注阅读（Esc）'
+                      : '专注阅读，隐藏上方信息'}
+                    ><Icon
+                      name={focusMode ? 'collapse' : 'expand'}
+                      size={18}
+                    /></button
+                  >
+                  <button
+                    class="icon-button"
+                    onclick={() => downloadMap('svg')}
+                    disabled={!map}
+                    aria-label="下载 SVG 思维导图"
+                    title="下载完整 SVG 思维导图（含未展开条目）"
+                    ><Icon name="download" size={18} /></button
+                  ><button
+                    class="icon-button"
+                    onclick={() => downloadMap('png')}
+                    disabled={!map}
+                    aria-label="下载 PNG 思维导图"
+                    title="下载完整 PNG 思维导图（含未展开条目）"
+                    ><Icon name="image" size={18} /></button
+                  >
+                </div>
+              </div>
+              {#if map}
+                {#key map.tree}
+                  <MindMapWorkspace
+                    tree={map.tree}
+                    theme={appearance}
+                    ondownloadoutline={downloadOutline}
+                  />
+                {/key}
+                <p class="result-meta">
+                  {map.source} · {detailProfile(map.detailLevel).label}
+                </p>
+              {:else}
+                <WorkspaceEmpty
+                  icon="map"
+                  title={busy === 'map'
+                    ? '正在梳理知识连接'
+                    : !video
+                      ? '从一个视频开始'
+                      : !transcript
+                        ? '先准备视频字幕'
+                        : '把知识连成一张图'}
+                  description={busy === 'map'
+                    ? '完成后可逐层展开主题、搜索要点，并导出完整导图。'
+                    : !video
+                      ? '打开 B 站视频，当前视频会自动出现在这里。'
+                      : !transcript
+                        ? '可以识别视频音频，也可以导入已有字幕。'
+                        : '按主题整理视频内容，展开要点，快速找到知识之间的联系。'}
+                  busy={busy === 'map'}
+                  action={busy
+                    ? ''
+                    : !video
+                      ? '重新读取当前页'
+                      : !transcript
+                        ? '准备字幕'
+                        : '生成导图'}
+                  disabled={!!transcript && !canGenerate}
+                  onaction={() =>
+                    transcript ? generate('map') : prepareSource()}
+                />
+              {/if}
+            </section>
+          {:else if page === 'summary'}
+            <section class="summary-pane" aria-label="Markdown 总结">
+              <div class="pane-heading">
+                <div>
+                  <span class="pane-eyebrow">重点与解释</span>
+                  <h1>Markdown 笔记</h1>
+                </div>
+                <div class="toolbar">
+                  <button
+                    class="icon-button"
+                    class:active={rawMarkdown}
+                    onclick={() => (rawMarkdown = !rawMarkdown)}
+                    disabled={!displayMarkdown}
+                    aria-pressed={rawMarkdown}
+                    aria-label="切换 Markdown 源码"
+                    title="切换预览 / Markdown 源码"
+                    ><Icon name="code" size={17} /></button
+                  ><button
+                    class="icon-button"
+                    onclick={copySummary}
+                    disabled={!shownSummary || busy === 'summary'}
+                    aria-label="复制 Markdown 总结"
+                    title="复制 Markdown 总结"
+                    ><Icon name="copy" size={17} /></button
+                  ><button
+                    class="icon-button"
+                    onclick={downloadSummary}
+                    disabled={!shownSummary || busy === 'summary'}
+                    aria-label="下载 Markdown 总结"
+                    title="下载 Markdown 总结 (.md)"
+                    ><Icon name="download" size={18} /></button
+                  >
+                </div>
+              </div>
+              {#if draft && busy !== 'summary'}<div
+                  class="draft-notice"
+                  role="status"
                 >
-                  {@html renderedMarkdown}
+                  <p>
+                    未完成草稿：生成已中断，以下内容不完整。可复制、下载或重新生成。
+                  </p>
+                  {#if summary}<button
+                      class="text-button"
+                      onclick={() => (draft = null)}>显示上次完整总结</button
+                    >{/if}
                 </div>{/if}
-            </article>
-            {#if shownSummary && busy !== 'summary'}
-              <p class="result-meta">
-                {shownSummary.source} · {detailProfile(shownSummary.detailLevel)
-                  .label}
-              </p>
-            {/if}
+              {#if displayMarkdown}
+                {#if !rawMarkdown && busy !== 'summary'}<SummaryNavigation
+                    html={renderedMarkdown}
+                    onjump={jumpSummary}
+                    ontop={topSummary}
+                  />{/if}
+                <article
+                  bind:this={summaryElement}
+                  class="summary-document"
+                  class:drafting={busy === 'summary'}
+                >
+                  {#if rawMarkdown}<pre
+                      class="markdown-source">{displayMarkdown}</pre>{:else}<div
+                      class="markdown-body"
+                    >
+                      {@html renderedMarkdown}
+                    </div>{/if}
+                </article>
+                {#if shownSummary && busy !== 'summary'}
+                  <p class="result-meta">
+                    {shownSummary.source} · {detailProfile(
+                      shownSummary.detailLevel,
+                    ).label}
+                  </p>
+                {/if}
+              {:else}
+                <WorkspaceEmpty
+                  icon="file"
+                  title={busy === 'summary'
+                    ? '正在整理视频笔记'
+                    : !video
+                      ? '从一个视频开始'
+                      : !transcript
+                        ? '先准备视频字幕'
+                        : '留下一份可复习的笔记'}
+                  description={busy === 'summary'
+                    ? '内容会逐步显示，可随时停止并保留草稿。'
+                    : !video
+                      ? '打开 B 站视频，当前视频会自动出现在这里。'
+                      : !transcript
+                        ? '先识别音频或导入字幕，再整理重点与详细解释。'
+                        : '整理重点、解释与例子。完成后可定位章节，复制或下载 Markdown。'}
+                  busy={busy === 'summary'}
+                  action={busy
+                    ? ''
+                    : !video
+                      ? '重新读取当前页'
+                      : !transcript
+                        ? '准备字幕'
+                        : '整理笔记'}
+                  disabled={!!transcript && !canGenerate}
+                  onaction={() =>
+                    transcript ? generate('summary') : prepareSource()}
+                />
+              {/if}
+            </section>
+          {:else if page === 'html'}
+            <HtmlReport
+              {video}
+              result={htmlResult}
+              {appearance}
+              layout={htmlLayout}
+              theme={htmlTheme}
+              filename={filename('-阅读页.html')}
+              busy={busy === 'html'}
+              {canGenerate}
+              {focusMode}
+              ontogglefocus={(button) => {
+                focusButton = button;
+                focusMode = !focusMode;
+              }}
+              onlayout={(value) => (htmlLayout = value)}
+              ontheme={(value) => (htmlTheme = value)}
+              onnotify={notify}
+              ongenerate={() => generate('html')}
+            />
           {:else}
-            <div class="empty-state">
-              <span class="empty-icon"
-                ><Icon
-                  name={busy === 'summary' ? 'loader' : 'file'}
-                  size={28}
-                /></span
-              >
-              <p>
-                {busy === 'summary'
-                  ? '正在生成总结…'
-                  : !video
-                    ? '请先打开 B 站视频'
-                    : !transcript
-                      ? '请先获取或导入字幕'
-                      : '尚未生成总结'}
-              </p>
-            </div>
+            <Subtitles
+              {transcript}
+              {tracks}
+              hasSpeech={!!speechTranscript}
+              hasImported={!!importedTranscript}
+              selected={selectedTrack}
+              {loading}
+              notice={sourceNotice}
+              problem={sourceProblem}
+              hasVideo={!!video}
+              onspeech={prepareSpeechSource}
+              onselect={changeLanguage}
+              onimport={importFile}
+              ondownload={downloadSubtitles}
+              oncopy={copySubtitles}
+              onseek={seek}
+            />
           {/if}
-        </section>
-      {:else if page === 'html'}
-        <HtmlReport
-          {video}
-          result={htmlResult}
-          {appearance}
-          layout={htmlLayout}
-          theme={htmlTheme}
-          filename={filename('-阅读页.html')}
-          busy={busy === 'html'}
-          {canGenerate}
-          {focusMode}
-          ontogglefocus={(button) => {
-            focusButton = button;
-            focusMode = !focusMode;
-          }}
-          onlayout={(value) => (htmlLayout = value)}
-          ontheme={(value) => (htmlTheme = value)}
-          onnotify={notify}
-          ongenerate={() => generate('html')}
-        />
-      {:else}
-        <Subtitles
-          {transcript}
-          {tracks}
-          selected={selectedTrack}
-          {loading}
-          notice={sourceNotice}
-          onselect={changeLanguage}
-          onimport={importFile}
-          ondownload={downloadSubtitles}
-          oncopy={copySubtitles}
-          onseek={seek}
-        />
-      {/if}
-    </main>
+        </Tabs.Content>
+      </main>
+    </Tabs.Root>
     <footer class="app-footer">
       <span
         ><span class="status-dot" class:connected={!!settings.apiKey}
         ></span>{settings.apiKey ? settings.model : '未配置 API'}</span
+      >
+      <span class="footer-local"
+        ><Icon name={online ? 'monitor' : 'offline'} size={12} />{online
+          ? '内容保存在本机'
+          : '离线阅读'}</span
       >
     </footer>
   {/if}

@@ -32,7 +32,7 @@ const server = createServer(async (request, response) => {
     if (filename.endsWith('sidepanel.html')) {
       const width = Math.max(
         280,
-        Math.min(800, Number(url.searchParams.get('width')) || 380),
+        Math.min(1200, Number(url.searchParams.get('width')) || 380),
       );
       body = Buffer.from(
         body

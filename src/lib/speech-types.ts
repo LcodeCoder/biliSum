@@ -26,6 +26,7 @@ export function normalizeSpeechPreferences(raw: unknown): SpeechPreferences {
 }
 export const SPEECH_SAMPLE_RATE = 16_000;
 export const SPEECH_CHUNK_SECONDS = 25;
+export const WHISPER_WINDOW_SECONDS = 30;
 export const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
 export const MAX_AUDIO_SECONDS = 4 * 60 * 60;
 export interface SpeechAudioChunk {

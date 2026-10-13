@@ -1,6 +1,6 @@
 {
   "name": "bilisum",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "type": "module",
   "description": "Bilibili AI side panel: mind maps, Markdown/HTML summaries and subtitles",
@@ -19,7 +19,9 @@
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
+    "@internationalized/date": "3.10.1",
     "@noble/hashes": "2.0.1",
+    "bits-ui": "2.19.5",
     "dompurify": "^3.2.7",
     "marked": "^16.4.1",
     "mediabunny": "1.61.4",

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import WorkspaceEmpty from './WorkspaceEmpty.svelte';
   import {
     createHtmlReport,
     type HtmlReportLayout,
@@ -98,7 +99,10 @@
 
 <section class="html-pane" aria-label="HTML 阅读页">
   <div class="pane-heading">
-    <h1>{focusMode ? '专注阅读' : 'HTML 阅读页'}</h1>
+    <div>
+      <span class="pane-eyebrow">整理与阅读</span>
+      <h1>{focusMode ? '专注阅读' : 'HTML 阅读页'}</h1>
+    </div>
     <div class="toolbar">
       {#if result}
         <button
@@ -130,39 +134,39 @@
       >
     </div>
   </div>
-  <div class="html-options">
-    <label class="html-option">
-      <span>版式</span>
-      <select
-        class="form-control"
-        aria-label="HTML 版式"
-        value={layout}
-        onchange={(event) =>
-          onlayout(event.currentTarget.value as HtmlReportLayout)}
-      >
-        <option value="sheet">卡片概览</option>
-        <option value="doc">长文阅读</option>
-      </select>
-    </label>
-    <label class="html-option">
-      <span>样式</span>
-      <select
-        class="form-control"
-        aria-label="HTML 主题"
-        value={theme}
-        onchange={(event) =>
-          ontheme(event.currentTarget.value as HtmlReportTheme)}
-      >
-        <option value="shadcn">简洁</option>
-        <option value="paper">纸张</option>
-        <option value="blueprint">蓝图</option>
-      </select>
-    </label>
-  </div>
-  <p class="html-note">
-    AI
-    根据当前字幕独立生成阅读页；切换版式、样式和外观只在本地重排。下载后可离线阅读。
-  </p>
+  {#if result}<div class="html-options">
+      <label class="html-option">
+        <span>版式</span>
+        <select
+          class="form-control"
+          aria-label="HTML 版式"
+          value={layout}
+          onchange={(event) =>
+            onlayout(event.currentTarget.value as HtmlReportLayout)}
+        >
+          <option value="sheet">卡片概览</option>
+          <option value="doc">长文阅读</option>
+        </select>
+      </label>
+      <label class="html-option">
+        <span>样式</span>
+        <select
+          class="form-control"
+          aria-label="HTML 主题"
+          value={theme}
+          onchange={(event) =>
+            ontheme(event.currentTarget.value as HtmlReportTheme)}
+        >
+          <option value="shadcn">简洁</option>
+          <option value="paper">纸张</option>
+          <option value="blueprint">蓝图</option>
+        </select>
+      </label>
+    </div>
+    <p class="html-note">
+      AI
+      根据当前字幕独立生成阅读页；切换版式、样式和外观只在本地重排。下载后可离线阅读。
+    </p>{/if}
   {#if problem}
     <div class="html-error" role="alert">
       <Icon name="alert" size={17} />
@@ -192,24 +196,22 @@
       referrerpolicy="no-referrer"
     ></iframe>
   {:else if !result}
-    <div class="empty-state html-empty">
-      <span class="empty-icon"><Icon name="code" size={28} /></span>
-      <p>
-        {!video
-          ? '请先打开 B 站视频'
-          : busy
-            ? '正在生成 HTML 阅读页…'
-            : '用 AI 把当前视频整理成可离线阅读的 HTML 页面。'}
-      </p>
-      {#if video}
-        <div class="html-empty-actions">
-          <button
-            class="text-button"
-            disabled={!canGenerate}
-            onclick={ongenerate}>用 AI 生成阅读页</button
-          >
-        </div>
-      {/if}
-    </div>
+    <WorkspaceEmpty
+      icon="code"
+      title={busy
+        ? '正在整理阅读页'
+        : !video
+          ? '从一个视频开始'
+          : '把视频变成一篇阅读页'}
+      description={busy
+        ? '完成后可在这里阅读，也可以下载到本机离线使用。'
+        : !video
+          ? '打开 B 站视频，准备字幕后即可开始。'
+          : '独立整理视频内容，支持章节导航和本地切换版式，下载后可离线阅读。'}
+      {busy}
+      action={video && !busy ? '用 AI 生成阅读页' : ''}
+      disabled={!canGenerate}
+      onaction={ongenerate}
+    />
   {/if}
 </section>

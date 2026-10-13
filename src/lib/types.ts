@@ -23,6 +23,8 @@ export interface VideoInfo {
 }
 
 export interface SubtitleTrack {
+  // Set only after the player response matches the requested video and part.
+  video?: Pick<VideoInfo, 'aid' | 'bvid' | 'cid' | 'page'>;
   id: string;
   language: string;
   label: string;
