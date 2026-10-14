@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-label="biliSum: Turn Bilibili videos into clear notes. Mind maps, Markdown and subtitles in one browser side panel." style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,'PingFang SC',sans-serif">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8fbff"/><stop offset=".56" stop-color="#eef6fc"/><stop offset="1" stop-color="#e4f0fa"/></linearGradient>
+  <linearGradient id="bluewash" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7eaf9"/><stop offset="1" stop-color="#c0dcf1"/></linearGradient>
+  <filter id="shadow" x="-25%" y="-30%" width="160%" height="175%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#1c4770" flood-opacity=".13"/></filter>
+  <filter id="softshadow" x="-30%" y="-50%" width="165%" height="220%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#234b70" flood-opacity=".09"/></filter>
+  <clipPath id="brandClip"><rect x="64" y="48" width="48" height="48" rx="10.56"/></clipPath>
+</defs>
+<rect width="1400" height="560" fill="url(#bg)"/>
+<circle cx="1225" cy="243" r="354" fill="url(#bluewash)" opacity=".58"/>
+<circle cx="1350" cy="85" r="254" fill="none" stroke="#ffffff" stroke-width="2" opacity=".7"/>
+<circle cx="1350" cy="85" r="296" fill="none" stroke="#ffffff" stroke-width="1.2" opacity=".55"/>
+<path d="M644 68v426" stroke="#dce9f3"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASzSURBVHhe7dqxddtAEIRhlaAS3A8TleBS1AFKcAkuQTEjleASHDpwIL/Vs/SsHwdz+G4p3OIm+BIQOM5hRxRJ6e60nO863J+W88NpOT+elvPTaTk/n5bzi91U3OO413HP497HDDgX2eqAKJ74eyOc7SNmETPhnC5aHbggnuRHI4CNIWZzVRFWBzZ8+fuywye0McWsYmac48rqQMPX03L+2XgSG1vMLGbHeV5VgKWxsNUSM+RcpQJ8ayxmNcUsOd//FsA/+cfTfCVYHfj7e4MX2zGs3hNw+PHO0W/4jitm++HTAQvgj3rHFzNuFiC+QODJdkzvXxb9WwB/wzePmPWHAvinfz6vrwJvBfAfduYTM38tQPw5kQ/aHO798j+3hyhA/GMBH7A5PEYB/Nl/Xk9RAP8b17yeowA8aBNxASbnAkzOBZicCzA5F2ByLsDkXIDJuQCTcwEm9+kF+PX75RC4r6o+tQC8idVxfxW5AB24v4pcgA7cX0UuQAfuryIXoAP3V9EwBeC5o2DOCpmvMUQBeN5omLdKboULIGDeKrkVLoCAeavkVrgAAuatklvhAgiYNzM318xcW+ECCJg3KzfXI55/Cy6AgHkzcnOtLbwumwsgYN7e3FznEl6fyQUQMO8emCmLCyBg3j0wUxYXQMC8e2CmLC6AgHn3wExZXAAB8+6BmbK4AALm3QMzZXEBBMzbm5vrXMLrM7kAAubNyM21tvC6bC6AgHmzcnM94vm34AIImDczN9fMXFvhAgiYt0puhQsgYN4quRUugIB5q+RWuAAC5q2SW+ECCJi3Sm7FEAUY+WYyZ4XM1ximABVxfxW5AB24v4pcgA7cX0UuQAfuryIXoAP3V5EL0IH7q2iYAvDcUTBnhczXGKIAPG80zFslt8IFEDBvldwKF0DAvFVyK1wAAfNWya1wAQTMWyW3wgUQMG9mbq6ZubbCBRAwb1Zurkc8/xZcAAHzZuTmWlt4XTYXQMC8vbm5ziW8PpMLIGDePTBTFhdAwLx7YKYsLoCAeffATFlcAAHz7oGZsrgAAubdAzNlcQEEzLsHZsriAgiYtzc317mE12dyAQTMm5Gba23hddlcAAHzZuXmesTzb8EFEDBvZm6umbm2wgUQMG+V3AoXQMC8VXIrXAAB81bJrXABBMxbJbfCBRAwb5XciiEKMPLNZM4Kma8xTAEq4v4qcgE6cH8VuQAduL+KXIAO3F9FLkAH7q+iTy1A4E2sivuq6tMLYGNxASbnAkzOBZicCzA5F2ByLsDkXIDJuQCTiwI886BN4zkK8NR4wObwFAV4bDxgc3iMAjw0HrA5PEQB7hsP2BzuowDhe+NBO7aY+d1bAfxrYD4x8/cChB+Nk+yYYtavc/+3AH4VmMfrTz8LEPydwPHFjN9nzgJ8OS3nn42L7BhitjHjzQKEr40L7Rhith/mzeG/WRoXW20xU855swDhW2MRqylmyfleLEDwK0F9zZ98tQAhfm/4jWE9MbPV73xaHdgQ7xz9EbGOmNWHd/tbVgcuiC8Q/I3huGI271/yKFYHRPEk/gPSOGIWVw3+zerAleJPyfHE8U8l8bLjfy+7vbjHca/jnse9jxlwLrI/psk4+EDaWHEAAAAASUVORK5CYII=" x="64" y="48" width="48" height="48" clip-path="url(#brandClip)"/><text x="128" y="82" font-size="34" font-weight="730" fill="#20364d" letter-spacing="-.8">biliSum</text>
+<text x="65" y="139" font-size="12.5" font-weight="690" fill="#487599" letter-spacing="2.25">FOR BILIBILI LEARNERS</text>
+<text x="60" y="216" font-size="63" font-weight="760" fill="#20364d" letter-spacing="-2">Turn videos into</text>
+<text x="60" y="290" font-size="67" font-weight="760" fill="#2e78b7" letter-spacing="-2.1">clear notes.</text>
+<text x="65" y="339" font-size="22" font-weight="450" fill="#597186" >Mind maps, Markdown &amp; subtitles.</text>
+<text x="65" y="371" font-size="22" font-weight="450" fill="#597186" >All in one Bilibili side panel.</text>
+<rect x="64" y="405" width="157" height="42" rx="12" fill="#ffffff" stroke="#d6e5f0"/><svg x="78" y="416" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="6" height="8" rx="1.5"/><rect x="16" y="2" width="6" height="6" rx="1.5"/><rect x="16" y="16" width="6" height="6" rx="1.5"/><path d="M8 12h4m0 0V5h4m-4 7v7h4"/></svg><text x="107" y="432" font-size="15" font-weight="560" fill="#20364d" >Mind maps</text>
+<rect x="233" y="405" width="158" height="42" rx="12" fill="#ffffff" stroke="#d6e5f0"/><svg x="247" y="416" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg><text x="276" y="432" font-size="15" font-weight="560" fill="#20364d" >Markdown</text>
+<rect x="403" y="405" width="146" height="42" rx="12" fill="#ffffff" stroke="#d6e5f0"/><svg x="417" y="416" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M6 10h5m3 0h4M6 15h12"/></svg><text x="446" y="432" font-size="15" font-weight="560" fill="#20364d" >Subtitles</text>
+<circle cx="69" cy="492" r="4" fill="#4f94ca"/>
+<text x="82" y="497" font-size="13.5" font-weight="500" fill="#597186" >Your AI provider · Chinese summaries</text>
+
+<g filter="url(#shadow)">
+  <rect x="710" y="63" width="618" height="365" rx="21" fill="#ffffff" stroke="#cbdeed"/>
+</g>
+<path d="M711 118h616" stroke="#e0eaf2"/>
+<svg x="737" y="82" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="6" height="8" rx="1.5"/><rect x="16" y="2" width="6" height="6" rx="1.5"/><rect x="16" y="16" width="6" height="6" rx="1.5"/><path d="M8 12h4m0 0V5h4m-4 7v7h4"/></svg><text x="769" y="101" font-size="17" font-weight="650" fill="#20364d" >思维导图</text>
+<rect x="1194" y="81" width="107" height="26" rx="8" fill="#eef6fc"/>
+<text x="1247.5" y="99" font-size="10.5" font-weight="690" fill="#427fae" text-anchor="middle" letter-spacing=".8">MIND MAP</text>
+<rect x="733" y="137" width="572" height="266" rx="13" fill="#f7fbfe"/>
+
+<path d="M919 262h36c29 0 18-87 51-87h29M919 262h116M919 262h36c29 0 18 60 51 60h29" fill="none" stroke="#8cb5d8" stroke-width="2"/>
+<rect x="760" y="236" width="159" height="52" rx="10" fill="#4f94ca"/>
+<svg x="776" y="253" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 5 11 7-11 7Z"/></svg><text x="806" y="268" font-size="17" font-weight="640" fill="#ffffff" >视频主题</text>
+<rect x="1035" y="150" width="242" height="50" rx="10" fill="#ffffff" stroke="#b8d3e8"/>
+<circle cx="1055" cy="170" r="4" fill="#4f94ca"/>
+<text x="1068" y="175" font-size="15" font-weight="650" fill="#20364d" >核心概念</text><text x="1068" y="191" font-size="10.5" font-weight="430" fill="#597186" >概念、定义与上下文</text>
+<rect x="1035" y="237" width="242" height="50" rx="10" fill="#ffffff" stroke="#b8d3e8"/>
+<circle cx="1055" cy="257" r="4" fill="#4f94ca"/>
+<text x="1068" y="262" font-size="15" font-weight="650" fill="#20364d" >关键论证</text><text x="1068" y="278" font-size="10.5" font-weight="430" fill="#597186" >因果关系与代表性例子</text>
+<rect x="1035" y="297" width="242" height="50" rx="10" fill="#ffffff" stroke="#b8d3e8"/>
+<circle cx="1055" cy="317" r="4" fill="#4f94ca"/>
+<text x="1068" y="322" font-size="15" font-weight="650" fill="#20364d" >结论与要点</text><text x="1068" y="338" font-size="10.5" font-weight="430" fill="#597186" >把视频主线整理清楚</text>
+<text x="755" y="382" font-size="11.5" font-weight="500" fill="#718ba2" >主题 · 层级 · 大纲</text>
+
+<g filter="url(#shadow)">
+  <rect x="943" y="365" width="398" height="149" rx="18" fill="#ffffff" stroke="#d2e3ef"/>
+</g>
+<svg x="963" y="385" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg><text x="994" y="402" font-size="18" font-weight="670" fill="#20364d" >Markdown</text>
+<rect x="1223" y="383" width="94" height="26" rx="8" fill="#eaf4fc"/>
+<svg x="1234" y="389" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><text x="1256" y="401" font-size="12" font-weight="640" fill="#377dae" >.md</text>
+<path d="M964 422h356" stroke="#e0eaf2"/>
+<text x="965" y="447" font-size="14" font-weight="650" fill="#20364d" >核心要点</text>
+<text x="965" y="471" font-size="12.5" font-weight="450" fill="#597186" >保留完整主线，解释概念与联系。</text>
+<rect x="965" y="485" width="153" height="5" rx="2.5" fill="#dce9f3"/>
+<rect x="1129" y="485" width="71" height="5" rx="2.5" fill="#e8f1f8"/>
+
+<rect x="727" y="457" width="191" height="48" rx="14" fill="#ffffff" stroke="#c6dcec" filter="url(#softshadow)"/>
+<svg x="742" y="471" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#4f94ca" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M6 10h5m3 0h4M6 15h12"/></svg>
+<text x="774" y="478" font-size="12.5" font-weight="620" fill="#20364d" >Subtitle export</text>
+<text x="774" y="494" font-size="10.5" font-weight="500" fill="#6a849b" >TXT / SRT</text>
+</svg>
