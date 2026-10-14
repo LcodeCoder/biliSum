@@ -80,14 +80,9 @@ const run = (
   prefs = preferences,
   signal = new AbortController().signal,
 ) =>
-  transcribeSpeechAudio(
-    new Blob(['fixture']),
-    2,
-    prefs,
-    signal,
-    () => {},
-    deps,
-  );
+  transcribeSpeechAudio(new Blob(['fixture']), 2, prefs, signal, () => {}, {
+    dependencies: deps,
+  });
 test('complete native text is untimed; Whisper is timed and explicitly complete', async () => {
   const native = fixture();
   const nativeOutput = await run(native.deps);
@@ -605,4 +600,45 @@ test('a failed second retry rejects the whole Whisper window; runtime failures a
     /memory failure/,
   );
   assert.equal(calls, 1);
+});
+
+test('shorter CID audio is recognized completely using its own timeline and imports stay strict', async () => {
+  const { deps, stats } = fixture(
+    [
+      [0, 25],
+      [25, 50],
+      [50, 75],
+      [75, 100],
+      [100, 125],
+      [125, 150],
+      [150, 175],
+      [175, 200],
+      [200, 212],
+    ],
+    212,
+  );
+  const signal = new AbortController().signal;
+  const output = await transcribeSpeechAudio(
+    new Blob(['fixture']),
+    220,
+    { ...preferences, engine: 'whisper' },
+    signal,
+    () => {},
+    { dependencies: deps, allowShorterTrack: true },
+  );
+  assert.equal(output.complete, true);
+  assert.equal(output.duration, 212);
+  assert.equal(stats.whisperCalls, 9);
+  assert.equal(output.transcript.cues.at(-1)?.to, 212);
+  await assert.rejects(
+    transcribeSpeechAudio(
+      new Blob(['fixture']),
+      220,
+      preferences,
+      signal,
+      () => {},
+      { dependencies: deps },
+    ),
+    /分 P/,
+  );
 });

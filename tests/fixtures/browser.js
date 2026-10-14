@@ -338,6 +338,10 @@
     scripting: {
       async executeScript(options) {
         if (!options.args) return [{ result: fixtureVideo }];
+        if (options.args.length === 2) {
+          window.__playerSubtitleArgs = options.args;
+          return [{ result: true }];
+        }
         document.documentElement.dataset.lastSeek = options.args[3];
         return [{ result: true }];
       },
@@ -486,7 +490,7 @@
       return reply({
         code: 0,
         data: {
-          timelength: (currentPage === 1 ? 2 : 3) * 1000,
+          timelength: fixtureVideo.pages[currentPage - 1].duration * 1000,
           dash: {
             audio: [
               {
@@ -499,7 +503,14 @@
         },
       });
     if (url.startsWith('https://a.bilivideo.com/fixture.wav'))
-      return new Response(wav(currentPage === 1 ? 2 : 3));
+      return new Response(
+        wav(
+          currentPage === 1
+            ? Number(parameters.get('audioDuration')) ||
+                fixtureVideo.pages[0].duration
+            : fixtureVideo.pages[1].duration,
+        ),
+      );
     if (url.startsWith('https://api.bilibili.com/x/player/'))
       return reply({
         code: 0,

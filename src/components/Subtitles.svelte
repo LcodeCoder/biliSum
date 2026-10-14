@@ -20,6 +20,8 @@
     ondownload,
     oncopy,
     onseek,
+    displaying,
+    ontoggledisplay,
   }: {
     transcript: Transcript | null;
     tracks: SubtitleTrack[];
@@ -36,6 +38,8 @@
     ondownload: (format: 'txt' | 'srt') => void;
     oncopy: () => void;
     onseek: (seconds: number) => void;
+    displaying: boolean;
+    ontoggledisplay: () => void;
   } = $props();
   let query = $state('');
   let limit = $state(150);
@@ -158,6 +162,20 @@
       </select>
     </div>
   {/if}
+  <div class="language-row">
+    <button
+      class="text-button"
+      aria-pressed={displaying && !!transcript?.timed}
+      disabled={!transcript?.timed || loading || !hasVideo}
+      onclick={ontoggledisplay}
+      ><Icon name="subtitles" size={17} />{displaying && transcript?.timed
+        ? '关闭视频字幕'
+        : '在视频中显示'}</button
+    >
+    {#if transcript && !transcript.timed}<small
+        >纯文本字幕没有时间轴，无法同步显示</small
+      >{/if}
+  </div>
   <div class="search-field control-field compact-control">
     <Icon name="search" size={17} />
     <input

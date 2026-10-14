@@ -91,3 +91,19 @@ test('concurrent saves retain both parts and eviction stays below byte and count
   );
   assert.ok(await cache.load({ ...video, cid: 214 }, 'zh-CN', 'auto'));
 });
+
+test('completed shorter CID audio survives cache save and load without accepting large gaps', async () => {
+  const cache = createSpeechCache(fixture());
+  const current = { ...video, duration: 220 };
+  const shorter = { ...output, duration: 211.9981859410431 };
+  await cache.save(current, 'zh-CN', shorter);
+  assert.deepEqual(await cache.load(current, 'zh-CN', 'auto'), shorter);
+  assert.equal(
+    await cache.load({ ...current, duration: 240 }, 'zh-CN', 'auto'),
+    null,
+  );
+  await assert.rejects(
+    cache.save(current, 'zh-CN', { ...shorter, duration: 200 }),
+    /分 P/,
+  );
+});

@@ -118,7 +118,9 @@ export function createSpeechCache(
         .sort((a, b) => b.updatedAt - a.updatedAt);
       for (const entry of candidates) {
         try {
-          checkAudioDuration(entry.output.duration, video.duration);
+          checkAudioDuration(entry.output.duration, video.duration, {
+            allowShorterTrack: true,
+          });
           return entry.output;
         } catch {
           /* Different or corrupt audio coverage. */
@@ -132,7 +134,9 @@ export function createSpeechCache(
       output: SpeechOutput,
     ): Promise<void> {
       const operation = async () => {
-        checkAudioDuration(output.duration, video.duration);
+        checkAudioDuration(output.duration, video.duration, {
+          allowShorterTrack: true,
+        });
         const entry = validEntry({
           version: CACHE_VERSION,
           bvid: video.bvid,

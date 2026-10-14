@@ -1,3 +1,4 @@
+import { renderPlayerSubtitles } from './player-subtitles';
 import { browser } from 'wxt/browser';
 import { AUDIO_ORIGINS } from './speech-audio';
 import { normalizeSpeechPreferences } from './speech-types';
@@ -257,3 +258,19 @@ export const speechCache = createSpeechCache(
     else await operation();
   },
 );
+
+export async function showPlayerSubtitles(
+  tabId: number,
+  video: VideoInfo | null,
+  cues: import('./types').SubtitleCue[] = [],
+): Promise<void> {
+  const result = await browser.scripting.executeScript({
+    target: { tabId, frameIds: [0] },
+    func: renderPlayerSubtitles,
+    args: [
+      video ? { bvid: video.bvid, aid: video.aid, page: video.page } : null,
+      cues,
+    ],
+  });
+  if (!result[0]?.result) throw new Error('当前视频已切换，请刷新字幕后重试。');
+}

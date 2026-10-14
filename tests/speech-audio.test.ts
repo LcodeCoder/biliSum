@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  checkAudioDuration,
   normalizeAudioUrl,
   normalizeAudioPlan,
   signPlaybackQuery,
@@ -230,5 +231,23 @@ test('invalid expected duration and malformed WBI fallback return guidance witho
       },
     }),
     /签名信息格式异常/,
+  );
+});
+
+test('CID audio may end slightly before video while imports, truncation and longer tracks remain strict', () => {
+  const options = { allowShorterTrack: true };
+  checkAudioDuration(211.9981859410431, 220, options);
+  assert.throws(
+    () => checkAudioDuration(211.9981859410431, 220),
+    /音频 212.00 秒，视频 220.00 秒/,
+  );
+  assert.throws(() => checkAudioDuration(208, 220, options), /分 P/);
+  assert.throws(() => checkAudioDuration(223, 220, options), /分 P/);
+  checkAudioDuration(985, 1000, options);
+  assert.throws(() => checkAudioDuration(984.9, 1000, options), /分 P/);
+  assert.throws(() => checkAudioDuration(94, 100, options), /分 P/);
+  assert.throws(
+    () => normalizeAudioPlan({ ...payload, timelength: 212000 }, 220),
+    /分 P/,
   );
 });

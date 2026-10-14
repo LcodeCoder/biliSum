@@ -3388,3 +3388,97 @@ test('explicit browser recognition recovers from aborted with complete model sub
       [0, 0],
     );
   }, '&speech=native'));
+
+test('player subtitle switch sends timed cues and clears them for plain text', async () =>
+  scenario(async (page) => {
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    await page
+      .getByRole('button', { name: '在视频中显示', exact: true })
+      .click();
+    await page.waitForFunction(
+      () => window.__playerSubtitleArgs?.[1]?.length > 0,
+    );
+    assert.equal(
+      await page
+        .getByRole('button', { name: '关闭视频字幕' })
+        .getAttribute('aria-pressed'),
+      'true',
+    );
+    await page.getByRole('button', { name: '关闭视频字幕' }).click();
+    await page.waitForFunction(() => window.__playerSubtitleArgs?.[0] === null);
+    await page
+      .getByRole('button', { name: '在视频中显示', exact: true })
+      .click();
+    await page.waitForFunction(() => window.__playerSubtitleArgs?.[0] !== null);
+    await page.getByLabel('选择字幕文件').setInputFiles({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('纯文本资料'),
+    });
+    await page.waitForFunction(() => window.__playerSubtitleArgs?.[0] === null);
+    assert.equal(
+      await page
+        .getByRole('button', { name: '在视频中显示', exact: true })
+        .isDisabled(),
+      true,
+    );
+  }));
+
+test('shorter current-CID audio completes decoding, exports real end time and restores cache', async () =>
+  scenario(async (page) => {
+    await ready(page);
+    await page
+      .getByRole('button', { name: '识别视频音频', exact: true })
+      .click();
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /音频识别完成/,
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.speechStarts),
+      9,
+    );
+    await page.getByRole('tab', { name: '字幕页面', exact: true }).click();
+    const event = page.waitForEvent('download');
+    await page
+      .getByRole('button', { name: '下载 SRT 字幕', exact: true })
+      .click();
+    const download = await event;
+    const srt = await readFile(await download.path(), 'utf8');
+    assert.match(srt, /00:03:32,000/);
+    assert.ok(!srt.includes('00:03:40,000'));
+    await page.reload();
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /已恢复本地字幕/,
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.speechStarts),
+      0,
+    );
+    const data = await page.evaluate(() =>
+      Array.from(new Uint8Array(window.__biliSumFixture.wav(212))),
+    );
+    await page.getByLabel('选择音频文件', { exact: true }).setInputFiles({
+      name: 'shorter-import.wav',
+      mimeType: 'audio/wav',
+      buffer: Buffer.from(data),
+    });
+    await ready(page);
+    assert.match(
+      await page.locator('.source-notice').innerText(),
+      /时长与当前分 P 不一致/,
+    );
+    assert.equal(
+      await page.evaluate(() => window.__biliSumFixture.stats.speechStarts),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+        .isEnabled(),
+      true,
+    );
+  }, '&speech=whisper&speechDuration=220&audioDuration=212'));

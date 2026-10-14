@@ -40,19 +40,30 @@ export function normalizeAudioUrl(input: unknown): string {
     throw new Error('音频地址不属于受支持的 B 站音频服务。');
   return url.toString();
 }
-export function checkAudioDuration(duration: number, expected?: number): void {
+export interface AudioDurationOptions {
+  // Only for audio fetched by the current video's CID after playback metadata validation.
+  allowShorterTrack?: boolean;
+}
+export function checkAudioDuration(
+  duration: number,
+  expected?: number,
+  options: AudioDurationOptions = {},
+): void {
   if (!Number.isFinite(duration) || duration <= 0)
     throw new Error('音频时长无效，无法确认内容是否完整。');
   if (duration > MAX_AUDIO_SECONDS)
     throw new Error('本地识别目前支持最多 4 小时音频，请分段处理后导入字幕。');
-  if (
-    expected !== undefined &&
-    (!Number.isFinite(expected) ||
-      expected <= 0 ||
-      Math.abs(duration - expected) > 2)
-  )
+  if (expected === undefined) return;
+  if (!Number.isFinite(expected) || expected <= 0)
+    throw new Error('当前分 P 时长无效，请刷新视频后重试。');
+  // Video can outlast its AAC track (for example, a silent end card).
+  // Bound that difference by both 5% and 15 seconds, retaining the 2s rounding tolerance.
+  const shortfall = options.allowShorterTrack
+    ? Math.max(2, Math.min(15, expected * 0.05))
+    : 2;
+  if (expected - duration > shortfall || duration - expected > 2)
     throw new Error(
-      '音频时长与当前分 P 不一致，已停止识别。请刷新视频后重试。',
+      `音频时长与当前分 P 不一致（音频 ${duration.toFixed(2)} 秒，视频 ${expected.toFixed(2)} 秒），已停止识别。请刷新视频后重试。`,
     );
 }
 export function normalizeAudioPlan(

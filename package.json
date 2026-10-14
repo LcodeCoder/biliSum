@@ -1,6 +1,6 @@
 {
   "name": "bilisum",
-  "version": "0.1.13",
+  "version": "0.1.15",
   "private": true,
   "type": "module",
   "description": "Bilibili AI side panel: mind maps, Markdown/HTML summaries and subtitles",
@@ -13,6 +13,7 @@
     "postinstall": "wxt prepare",
     "preview": "node scripts/preview.mjs",
     "format": "prettier --write .",
+    "test:subtitles": "node --test tests/player-subtitles.mjs",
     "test:ui": "npm run build && node --test tests/ui.mjs",
     "prepare:speech": "node scripts/vendor-speech-runtime.mjs",
     "test:speech:smoke": "npm run build && node scripts/test-speech-smoke.mjs"

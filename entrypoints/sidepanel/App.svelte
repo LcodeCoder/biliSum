@@ -48,6 +48,7 @@
     saveResults,
     readPageVideo,
     seekVideo,
+    showPlayerSubtitles,
   } from '../../src/lib/extension';
   import {
     formatTime,
@@ -159,7 +160,44 @@
     transcript ? chunkTranscript(transcript).length : 0,
   );
   let importSerial = 0;
-  let tabId: number | undefined;
+  let tabId = $state<number | undefined>();
+  let displaySubtitles = $state(false);
+  let subtitleQueue = Promise.resolve();
+  $effect(() => {
+    const target = tabId;
+    const currentVideo = video;
+    const currentTranscript = transcript;
+    if (
+      !displaySubtitles ||
+      target === undefined ||
+      !currentVideo ||
+      !currentTranscript?.timed
+    )
+      return;
+    let active = true;
+    subtitleQueue = subtitleQueue
+      .then(() =>
+        active
+          ? showPlayerSubtitles(
+              target,
+              currentVideo,
+              $state.snapshot(currentTranscript.cues),
+            )
+          : undefined,
+      )
+      .catch((cause) => {
+        if (active) {
+          displaySubtitles = false;
+          notify(errorMessage(cause));
+        }
+      });
+    return () => {
+      active = false;
+      subtitleQueue = subtitleQueue
+        .then(() => showPlayerSubtitles(target, null))
+        .catch(() => {});
+    };
+  });
   let requestKey = '';
   let sourceSerial = 0,
     generationSerial = 0,
@@ -576,6 +614,7 @@
         (value) => {
           if (isCurrent(source.serial)) speechProgress = value;
         },
+        { allowShorterTrack: !file },
       );
       if (!isCurrent(source.serial) || source.signal.aborted) return;
       if (!(await acceptTranscript(output.transcript, source.serial))) return;
@@ -1626,6 +1665,8 @@
               ondownload={downloadSubtitles}
               oncopy={copySubtitles}
               onseek={seek}
+              displaying={displaySubtitles}
+              ontoggledisplay={() => (displaySubtitles = !displaySubtitles)}
             />
           {/if}
         </Tabs.Content>

@@ -1,5 +1,6 @@
 import { abortable } from './request';
 import { checkAudioDuration } from './speech-audio';
+import type { AudioDurationOptions } from './speech-audio';
 import {
   MAX_AUDIO_BYTES,
   SPEECH_CHUNK_SECONDS,
@@ -16,6 +17,7 @@ export async function openSpeechAudio(
   blob: Blob,
   expected: number,
   signal: AbortSignal,
+  options: AudioDurationOptions = {},
 ): Promise<DecodedSpeechAudio> {
   signal.throwIfAborted();
   if (!blob.size || blob.size > MAX_AUDIO_BYTES)
@@ -54,7 +56,7 @@ export async function openSpeechAudio(
       ]),
       signal,
     );
-    checkAudioDuration(duration, expected);
+    checkAudioDuration(duration, expected, options);
     if (
       !Number.isFinite(first) ||
       first > 0.3 ||

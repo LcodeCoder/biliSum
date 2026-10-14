@@ -1,4 +1,5 @@
 import { checkAudioDuration } from './speech-audio';
+import type { AudioDurationOptions } from './speech-audio';
 import { openSpeechAudio } from './speech-decode';
 import { isSilentAudio } from './speech-decode';
 import { nativeSpeechStatus, recognizeNativeChunk } from './speech-native';
@@ -42,15 +43,16 @@ export async function transcribeSpeechAudio(
   preferences: SpeechPreferences,
   signal: AbortSignal,
   onProgress: OnSpeechProgress,
-  deps: SpeechDependencies = dependencies,
+  options: AudioDurationOptions & { dependencies?: SpeechDependencies } = {},
 ): Promise<SpeechOutput> {
   signal.throwIfAborted();
   checkAudioDuration(expected);
   onProgress({ message: '正在检查音频完整性…' });
-  const audio = await deps.openAudio(blob, expected, signal);
+  const deps = options.dependencies ?? dependencies;
+  const audio = await deps.openAudio(blob, expected, signal, options);
   let worker: ReturnType<typeof createWhisperRecognizer> | undefined;
   try {
-    checkAudioDuration(audio.duration, expected);
+    checkAudioDuration(audio.duration, expected, options);
     let engine: 'native' | 'whisper' = 'whisper';
     if (preferences.engine !== 'whisper') {
       const status = await deps.nativeStatus(preferences.language, signal);
