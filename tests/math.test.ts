@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mathAtStart, markdownWithMath, renderMath } from '../src/lib/math';
+import {
+  mathAtStart,
+  markdownWithMath,
+  propositionNotation,
+  renderMath,
+} from '../src/lib/math';
 import { MATH_FONT_CSS, MATH_LAYOUT_CSS } from '../src/lib/math-style-data';
 
 test('math delimiters survive Markdown escapes, including inline, display and cached parentheses', () => {
@@ -117,6 +122,59 @@ test('untrusted and invalid TeX produces no active assets or alarming error mark
   })!;
   assert.doesNotMatch(bounded, /(?:style|width|height)="[^"]*500em/);
   assert.match(bounded, /10em/);
+});
+
+test('simple proposition negations display an overbar while preserving source data', () => {
+  for (const [source, expected] of [
+    [String.raw`\neg A`, String.raw`\overline{A}`],
+    [String.raw`\lnot B`, String.raw`\overline{B}`],
+    [String.raw`\neg{P}`, String.raw`\overline{P}`],
+    [String.raw`\lnot {Q}`, String.raw`\overline{Q}`],
+    [String.raw`\neg B\to\neg A`, String.raw`\overline{B}\to\overline{A}`],
+    [String.raw`A\land\neg B`, String.raw`A\land\overline{B}`],
+    [String.raw`\neg A_i`, String.raw`\overline{A_i}`],
+    [String.raw`\lnot P_{n+1}`, String.raw`\overline{P_{n+1}}`],
+    [String.raw`\neg{A_i}`, String.raw`\overline{A_i}`],
+  ]) {
+    assert.equal(propositionNotation(source!), expected);
+    const markdown = '$' + source + '$';
+    const cached = '(' + source + ')';
+    for (const input of [markdown, cached]) {
+      const expression = [...markdownWithMath(input).expressions.values()][0]!;
+      assert.equal(expression.raw, input);
+      assert.equal(expression.text, source);
+      const html = renderMath(expression)!;
+      assert.match(html, /katex-overline/);
+      assert.match(html, /<mover[^>]*accent="true"/);
+      assert.doesNotMatch(html, /¬/);
+    }
+  }
+});
+
+test('negation notation leaves inequalities, composites, text, code and existing accents intact', () => {
+  for (const source of [
+    String.raw`A\ne B`,
+    String.raw`A\neq B`,
+    String.raw`A\setminus B`,
+    String.raw`A\backslash B`,
+    String.raw`\neg (A\lor B)`,
+    String.raw`\neg{A\lor B}`,
+    String.raw`\neg A^2`,
+    String.raw`\neg ABC`,
+    String.raw`\neg x`,
+    String.raw`\text{否定 \neg A 的例子}`,
+    String.raw`\textbf{example \neg B}`,
+    String.raw`\operatorname{\neg A}`,
+    String.raw`\mbox{\neg P}`,
+    String.raw`\def\neg A{B}`,
+    String.raw`\newcommand{\neg}{A}`,
+    String.raw`\bar{A}`,
+    String.raw`\overline{B}`,
+    String.raw`\\neg A`,
+  ])
+    assert.equal(propositionNotation(source), source, source);
+  const code = '`$\\neg A$`\n\n```tex\n\\lnot B\n```';
+  assert.equal(markdownWithMath(code).expressions.size, 0);
 });
 
 test('offline math styles embed WOFF2 fonts and keep wide formulas locally scrollable', () => {

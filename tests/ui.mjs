@@ -669,6 +669,192 @@ test('hostile model HTML cannot execute scripts, load remote resources, or attac
     );
   }));
 
+const inlineMathMetrics = async (element) => {
+  await document.fonts.ready;
+  return [...element.querySelectorAll('.bilisum-math-inline')].map((math) => {
+    const marker = document.createElement('i');
+    marker.style.cssText =
+      'display:inline-block;width:0;height:0;padding:0;margin:0;border:0;vertical-align:baseline';
+    const outside = marker.cloneNode();
+    math.querySelector('.katex-html').append(marker);
+    math.after(outside);
+    const delta =
+      marker.getBoundingClientRect().y - outside.getBoundingClientRect().y;
+    marker.remove();
+    outside.remove();
+    return { tex: math.querySelector('annotation').textContent, delta };
+  });
+};
+
+test('the workbench and Markdown use the available width through live panel resizing', async () =>
+  scenario(
+    async (page) => {
+      await generate(page);
+      const content = await page.locator('.markdown-body').innerText();
+      for (const [width, height] of [
+        [1920, 1080],
+        [2560, 1440],
+        [1440, 1000],
+        [960, 850],
+        [640, 800],
+        [380, 850],
+        [280, 600],
+        [380, 450],
+        [1920, 1080],
+      ]) {
+        await page.setViewportSize({ width, height });
+        await page.waitForFunction(
+          (width) =>
+            Math.abs(
+              document.querySelector('.app-shell').getBoundingClientRect()
+                .width - width,
+            ) < 1,
+          width,
+        );
+        const boxes = await page.evaluate(() => {
+          const rect = (selector) => {
+            const box = document
+              .querySelector(selector)
+              .getBoundingClientRect();
+            return { x: box.x, width: box.width, right: box.right };
+          };
+          return {
+            shell: rect('.app-shell'),
+            pane: rect('.summary-pane'),
+            document: rect('.summary-document'),
+            navigation: rect('.reading-navigation'),
+            overflow: document.documentElement.scrollWidth > innerWidth,
+          };
+        });
+        assert.ok(
+          Math.abs(boxes.shell.width - width) < 1,
+          JSON.stringify(boxes),
+        );
+        assert.ok(
+          Math.abs(boxes.document.width - boxes.pane.width) < 1,
+          JSON.stringify(boxes),
+        );
+        assert.ok(
+          Math.abs(boxes.navigation.width - boxes.pane.width) < 1,
+          JSON.stringify(boxes),
+        );
+        assert.ok(
+          Math.abs(boxes.document.x - boxes.pane.x) < 1,
+          JSON.stringify(boxes),
+        );
+        assert.equal(boxes.overflow, false);
+        assert.equal(await page.locator('.markdown-body').innerText(), content);
+        for (const button of await page
+          .locator('.header-tools a, .header-tools button')
+          .all()) {
+          const bounds = await button.boundingBox();
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+        }
+      }
+      await page.reload();
+      await ready(page);
+      await page
+        .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+        .click();
+      assert.equal(await page.locator('.markdown-body').innerText(), content);
+      assert.equal(
+        await page.evaluate(() => window.__biliSumFixture.stats.ai),
+        0,
+      );
+    },
+    '&summary=table',
+    { width: 1920, height: 1080 },
+  ));
+
+test('logic negations sit above letters and inline formulas share the prose baseline', async () =>
+  scenario(
+    async (page, context) => {
+      await generate(page);
+      const body = page.locator('.markdown-body');
+      for (const width of [1440, 380, 280]) {
+        await page.setViewportSize({ width, height: 1000 });
+        const baselines = await body.evaluate(inlineMathMetrics);
+        assert.ok(baselines.length >= 10);
+        assert.ok(
+          baselines.every((math) => Math.abs(math.delta) < 0.5),
+          JSON.stringify(baselines),
+        );
+        const negation = body
+          .locator('.bilisum-math-inline')
+          .filter({
+            has: page.locator('annotation', { hasText: /^\\overline\{A\}$/ }),
+          })
+          .first();
+        assert.equal(await negation.locator('.katex-overline').count(), 1);
+        assert.equal(await negation.locator('mover[accent="true"]').count(), 1);
+        assert.ok(
+          !(await negation.locator('.katex-html').innerText()).includes('¬'),
+        );
+        const bar = await negation.locator('.overline-line').boundingBox();
+        const letter = await negation
+          .locator('.katex-overline .mathnormal')
+          .boundingBox();
+        assert.ok(
+          bar.y < letter.y + letter.height * 0.3,
+          JSON.stringify({ bar, letter }),
+        );
+      }
+      assert.ok(
+        (
+          await body
+            .locator('.bilisum-math')
+            .filter({
+              has: page.locator('annotation', { hasText: /AB\\ne 0/ }),
+            })
+            .innerText()
+        ).includes('≠'),
+      );
+      assert.equal(
+        await body.locator('code').first().innerText(),
+        String.raw`$\neg A$`,
+      );
+      const downloadEvent = page.waitForEvent('download');
+      await page
+        .getByRole('button', { name: '下载 Markdown 总结', exact: true })
+        .click();
+      const markdown = await readFile(
+        await (await downloadEvent).path(),
+        'utf8',
+      );
+      assert.ok(markdown.includes(String.raw`$\neg B\to\neg A$`));
+      await generateHtml(page);
+      const { download } = await downloadHtml(page);
+      const directory = await mkdtemp(join(tmpdir(), 'bilisum-logic-offline-'));
+      const file = join(directory, 'logic.html');
+      await download.saveAs(file);
+      const offline = await context.newPage();
+      const requests = [];
+      offline.on('request', (request) => {
+        if (!request.url().startsWith('file:')) requests.push(request.url());
+      });
+      await context.setOffline(true);
+      try {
+        await offline.goto(pathToFileURL(file).href);
+        const baselines = await offline
+          .locator('body')
+          .evaluate(inlineMathMetrics);
+        assert.ok(baselines.length >= 10);
+        assert.ok(
+          baselines.every((math) => Math.abs(math.delta) < 0.5),
+          JSON.stringify(baselines),
+        );
+        assert.ok((await offline.locator('.katex-overline').count()) >= 5);
+        assert.deepEqual(requests, []);
+      } finally {
+        await context.setOffline(false);
+        await offline.close();
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    '&summary=logic&htmlTree=none',
+    { width: 1440, height: 1000 },
+  ));
+
 test('math notes render cached and standard formulas while preserving code, prices and original Markdown', async () => {
   for (const width of [280, 720]) {
     await scenario(

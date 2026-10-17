@@ -68,7 +68,7 @@
       },
       "body": {
         "displayName": "阅读正文",
-        "purpose": "14px／1.85，最长72ch。"
+        "purpose": "应用内 Markdown 按内容区全宽阅读；独立 HTML 长文版保留文档行宽。"
       },
       "control": {
         "displayName": "控件文字",
@@ -176,8 +176,25 @@
       "inlineDelimiters": ["$...$", "\\(...\\)"],
       "displayDelimiters": ["$$...$$", "\\[...\\]"],
       "legacyCache": "识别旧缓存中包含明确 TeX 命令或代数表达式的括号式公式；普通说明、金额与代码保留原文。",
-      "layout": "行内公式与正文基线衔接；独立公式留出上下间距，宽公式局部横向滚动。",
-      "offline": "公式样式与 WOFF2 字体在扩展和单文件 HTML 中内嵌，无远程资源。"
+      "layout": "行内公式使用自然基线与正文对齐，不作固定向下偏移；独立公式保留上下间距，宽公式局部横向滚动。",
+      "offline": "公式样式与 WOFF2 字体在扩展和单文件 HTML 中内嵌，无远程资源。",
+      "propositionNotation": "单个大写命题的 \\neg 或 \\lnot 显示为上横线，可带下标；不等关系和复合式的否定保留原写法。"
+    },
+    "layout": {
+      "appWidth": "随窗口宽度铺满，无固定最大宽度。",
+      "markdownWidth": "内容区全宽，无字符数最大宽度。",
+      "workbenchPadding": "clamp(22px, 1.6cqi, 32px)",
+      "narrowPaperPadding": "18px",
+      "compactPaperPadding": "14px",
+      "standaloneHtmlLongform": "正文保持 72ch，保留目录与连续阅读布局。"
+    },
+    "iconography": {
+      "identity": "黄色手绘纸片与墨色导图标识。",
+      "surfaces": ["浏览器工具栏", "扩展管理页", "侧栏 favicon"],
+      "sizes": [16, 32, 48, 128],
+      "faviconSize": 32,
+      "source": "public/icons/source.svg",
+      "generate": "node scripts/generate-icons.mjs"
     }
   },
   "components": [
@@ -216,9 +233,9 @@
       "name": "阅读纸片",
       "kind": "article",
       "refersTo": "reading-paper",
-      "description": "正文14px／1.85；只加一条胶带。",
+      "description": "应用内 Markdown 纸片随内容区铺满，保留手写正文与少量胶带。",
       "html": "<div class=\"ds-canvas\"><article class=\"ds-paper\"><h2>信息如何变成知识</h2><p>先明确问题，再提取概念、建立连接，并通过应用和回顾检验理解。</p></article></div>",
-      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-paper{position:relative;max-width:72ch;padding:18px;border:1.5px dashed var(--line,#aaa99a);border-radius:3px 6px 4px 5px;background:var(--surface,#fffef5);box-shadow:3px 3px 0 var(--marker-teal,#4ecdc4)}.ds-paper:before{content:\"\";position:absolute;left:24px;top:-7px;width:58px;height:13px;background:var(--marker-yellow,#ffd93d);transform:rotate(-3deg)}.ds-paper h2{font-size:20px;line-height:1.5;margin:0 0 12px}.ds-paper p{margin:0}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+      "css": ".ds-canvas{container-type:inline-size;padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-paper{position:relative;box-sizing:border-box;width:100%;min-width:0;padding:18px;border:1.5px dashed var(--line,#aaa99a);border-radius:3px 6px 4px 5px;background:var(--surface,#fffef5);box-shadow:3px 3px 0 var(--marker-teal,#4ecdc4)}.ds-paper:before{content:\"\";position:absolute;left:24px;top:-7px;width:58px;height:13px;background:var(--marker-yellow,#ffd93d);transform:rotate(-3deg)}.ds-paper h2{font-size:20px;line-height:1.5;margin:0 0 12px}.ds-paper p{margin:0}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}@container(min-width:640px){.ds-paper{padding:clamp(22px,1.6cqi,32px)}}@container(max-width:335px){.ds-paper{padding:14px}}"
     },
     {
       "name": "向右导图",
@@ -236,7 +253,8 @@
       "细虚线、小幅不规则圆角、无模糊硬偏移影。",
       "导图只向右，基础间距首级140px、后续100px，随可见高度温和拉宽。",
       "浅色、护眼、深色以及离线导出共享色板与字体。",
-      "导图默认1倍阅读，展开只平移；数学公式使用内嵌KaTeX字体。"
+      "导图默认1倍阅读，展开只平移；数学公式使用内嵌KaTeX字体。",
+      "应用与 Markdown 随窗口铺满；独立 HTML 长文保留文档行宽。"
     ],
     "rules": [
       {
@@ -251,8 +269,13 @@
       },
       {
         "name": "数学字形",
-        "body": "公式使用 KaTeX 专用字体，作为手写字体规则的例外；样式与字体内嵌，宽公式局部横向滚动。",
+        "body": "公式使用 KaTeX 专用字体并与正文自然对齐；简单命题否定用上横线，复合式和不等关系保留原写法。样式与字体内嵌。",
         "section": "typography"
+      },
+      {
+        "name": "全宽工作台",
+        "body": "应用与 Markdown 使用可用内容区全宽，按容器调整内距；独立 HTML 长文保留自己的文档节奏。",
+        "section": "layout"
       }
     ],
     "dos": [

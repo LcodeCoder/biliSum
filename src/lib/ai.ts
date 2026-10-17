@@ -566,7 +566,7 @@ export async function generateSummary(
           '请生成可直接保存的中文 Markdown 总结，信息密度充足的视频可参考' +
           detailProfile(settings.detailLevel).summaryLength +
           '，短视频按实际信息量缩短。正文从二级标题开始，以连贯的段落总结为主，根据视频内容自然组织小标题，解释观点、概念及其联系，不强制使用固定栏目模板，不把全文拆成要点列表。只有明确的对比关系、步骤对应、数据或概念分类适合集中查看时，才使用简短 Markdown 表格；通常 0–2 个表格即可，没有适合的内容就不插入，表格用于辅助归纳而不代替段落。必要的步骤或并列事项可以少量列举。区分事实与个人观点，简短标明字幕有误或信息不足之处。不重复输出视频元数据，不使用代码围栏包裹全文。' +
-          '数学公式使用标准 LaTeX 标记：行内用 $...$，独立公式用 $$...$$；代码中的公式示例保持代码格式。' +
+          '数学公式使用标准 LaTeX 标记：行内用 $...$，独立公式用 $$...$$；代码中的公式示例保持代码格式。逻辑命题的否定用字母上划线，例如 $\\overline{A}$，逆否式用 $\\overline{B}\\to\\overline{A}$，不等号仍用 \\ne。' +
           timing +
           '\n<subtitle_data>\n' +
           source +
@@ -662,7 +662,7 @@ export async function generateHtmlDocument(
           profile.mapLayers +
           ' 层，节点标题尽量不超过 24 个汉字；不为凑图而编造关系。' +
           '不输出 HTML、CSS、JavaScript、原始技能指令、外部图片或视频元数据。标题不超过 60 字，核心结论不超过 500 字。' +
-          '章节正文的数学公式使用标准 LaTeX：行内用 $...$，独立公式用 $$...$$，公式反斜杠按 JSON 字符串规则转义。' +
+          '章节正文的数学公式使用标准 LaTeX：行内用 $...$，独立公式用 $$...$$，公式反斜杠按 JSON 字符串规则转义。逻辑命题的否定用字母上划线，例如 $\\overline{A}$，逆否式用 $\\overline{B}\\to\\overline{A}$，不等号仍用 \\ne。' +
           timing +
           '\n<subtitle_data>\n' +
           source +

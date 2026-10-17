@@ -485,16 +485,32 @@ $$\underbrace{x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8+x_9+x_{10}+x_{11}+x_{12}}_{\text{�
 <span class="katex" style="font-size:100px" onclick="window.__mathXss=1">模型伪造样式</span>
 <img src="https://math-hostile.example/image"><a href="javascript:window.__mathXss=2">危险链接</a>
 $\href{https://math-hostile.example/}{不能创建链接}$`;
+  const logicSummary = String.raw`## 基本逻辑：命题与否定
+
+命题 $A$ 为真时，否定命题 $\neg A$ 为假。已有上划线 $\overline{A}$ 与中文在同一行；字母 $R$ 表示实数集。逆否命题为 $\neg B\to\neg A$。
+
+带下标的命题 $\lnot P_i$ 也使用上划线。不等式 $AB\ne 0\Rightarrow A\ne 0$ 保留不等号。分式 $\frac{a}{b}$ 和平方 $X^2\ge 0$ 随正文基线排列。
+
+复合命题 $\neg(A\land B)$ 保留其逻辑结构。代码示例：\`$\neg A$\`，金额 $5 和 $10。
+
+$$\overline{B}\to\overline{A}$$
+
+| 命题 | 否定 |
+| --- | --- |
+| $A$ | $\neg A$ |
+| $B$ | $\lnot B$ |`;
   const fixtureSummary =
-    parameters.get('summary') === 'math'
-      ? mathSummary.replaceAll('\\`', '`')
-      : parameters.get('summary') === 'html-hostile'
-        ? htmlHostileSummary
-        : parameters.get('summary') === 'table'
-          ? tableSummary
-          : parameters.get('summary') === 'wide-table'
-            ? wideTableSummary
-            : '## 信息如何变成知识\n\n视频把知识整理分为**明确问题、提取概念、建立连接、主动回顾**四个步骤。收集资料之前先确定想解决的问题，再用自己的话概括内容，把新概念与已有经验联系起来，最后通过实际使用检验理解。\n\n## 从问题出发，留下可复用的记录\n\n[00:05](https://www.bilibili.com/video/BV1xx411c7mD/?t=5) 提到，明确问题能帮助筛选真正有用的信息。随后提取关键概念并记录核心结论，重点是形成自己的解释，而不是保存更多原文。\n\n[00:22](https://www.bilibili.com/video/BV1xx411c7mD/?t=22) 强调新知识需要与已有经验连接。视频举出思维导图与 Markdown 两种记录方式：前者方便查看关系，后者适合保留细节，二者可以配合使用。\n\n| 记录方式 | 适合保留的内容 |\n| --- | --- |\n| 思维导图 | 主题、分支与概念间的联系 |\n| Markdown | 观点解释、例子和详细笔记 |\n\n## 用应用和回顾检验理解\n\n视频最后提醒，知识体系会不断变化。主动回顾并在实际问题中应用，能发现理解中的缺口，也能为已有笔记补充新的联系。持续调整比一次性整理更重要。';
+    parameters.get('summary') === 'logic'
+      ? logicSummary.replaceAll('\\`', '`')
+      : parameters.get('summary') === 'math'
+        ? mathSummary.replaceAll('\\`', '`')
+        : parameters.get('summary') === 'html-hostile'
+          ? htmlHostileSummary
+          : parameters.get('summary') === 'table'
+            ? tableSummary
+            : parameters.get('summary') === 'wide-table'
+              ? wideTableSummary
+              : '## 信息如何变成知识\n\n视频把知识整理分为**明确问题、提取概念、建立连接、主动回顾**四个步骤。收集资料之前先确定想解决的问题，再用自己的话概括内容，把新概念与已有经验联系起来，最后通过实际使用检验理解。\n\n## 从问题出发，留下可复用的记录\n\n[00:05](https://www.bilibili.com/video/BV1xx411c7mD/?t=5) 提到，明确问题能帮助筛选真正有用的信息。随后提取关键概念并记录核心结论，重点是形成自己的解释，而不是保存更多原文。\n\n[00:22](https://www.bilibili.com/video/BV1xx411c7mD/?t=22) 强调新知识需要与已有经验连接。视频举出思维导图与 Markdown 两种记录方式：前者方便查看关系，后者适合保留细节，二者可以配合使用。\n\n| 记录方式 | 适合保留的内容 |\n| --- | --- |\n| 思维导图 | 主题、分支与概念间的联系 |\n| Markdown | 观点解释、例子和详细笔记 |\n\n## 用应用和回顾检验理解\n\n视频最后提醒，知识体系会不断变化。主动回顾并在实际问题中应用，能发现理解中的缺口，也能为已有笔记补充新的联系。持续调整比一次性整理更重要。';
   const listeners = {};
   const event = (name) => ({
     addListener(callback) {
@@ -533,7 +549,7 @@ $\href{https://math-hostile.example/}{不能创建链接}$`;
     runtime: {
       id: 'bilisum-fixture',
       getURL: (path) => location.origin + '/' + path,
-      getManifest: () => ({ version: '0.1.18' }),
+      getManifest: () => ({ version: '0.1.19' }),
       onInstalled: event('installed'),
       onStartup: event('startup'),
     },

@@ -1,1 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#5546c8"/><g transform="translate(19 19) scale(3.75)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h5v6H5zM17 3h4v4h-4zM17 17h4v4h-4zM3 12h2m5 0h3m0-7v14m0-14h4m-4 14h4"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>biliSum</title>
+  <g transform="rotate(-5 64 64)">
+    <path d="M20 13 Q61 10 105 13 Q115 13 116 24 L115 106 Q115 116 105 116 L21 115 Q11 114 12 104 L12 24 Q12 15 20 13Z" fill="#ffd93d" stroke="#2c2c2c" stroke-width="3.5" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- The map mark is shared with src/components/Icon.svelte. -->
+    <g class="map-mark" transform="translate(22 22) scale(3.5)" fill="none" stroke="#2c2c2c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 9h5v6H5zM17 3h4v4h-4zM17 17h4v4h-4zM3 12h2m5 0h3m0-7v14m0-14h4m-4 14h4"/>
+    </g>
+  </g>
+</svg>

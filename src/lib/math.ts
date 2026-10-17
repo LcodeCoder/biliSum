@@ -7,6 +7,99 @@ export interface MathExpression {
   display: boolean;
 }
 
+function groupEnd(source: string, start: number): number | undefined {
+  if (source[start] !== '{') return;
+  let depth = 1;
+  for (let index = start + 1; index < source.length; index++) {
+    if (escaped(source, index)) continue;
+    if (source[index] === '{') depth++;
+    if (source[index] === '}' && --depth === 0) return index + 1;
+  }
+}
+
+/** The course uses an overbar for a simple proposition's logical negation. */
+export function propositionNotation(source: string): string {
+  // Macro definitions and prose have their own grammar. Do not reinterpret
+  // command arguments or literal examples inside those contexts.
+  if (
+    /\\(?:[gx]?def|edef|let|futurelet|(?:re|pro)?newcommand|providecommand)\b/.test(
+      source,
+    )
+  )
+    return source;
+  let output = '';
+  for (let index = 0; index < source.length;) {
+    if (source[index] !== '\\') {
+      output += source[index++];
+      continue;
+    }
+    const command = /^\\(?:[A-Za-z]+|.)/s.exec(source.slice(index))?.[0];
+    if (!command) {
+      output += source[index++];
+      continue;
+    }
+    const afterCommand = index + command.length;
+    if (/^\\(?:text[a-zA-Z]*|mbox|operatorname)$/.test(command)) {
+      const group = /^\*?\s*\{/.exec(source.slice(afterCommand));
+      const end = group && groupEnd(source, afterCommand + group[0].length - 1);
+      if (end) {
+        output += source.slice(index, end);
+        index = end;
+        continue;
+      }
+    }
+    if (command !== '\\neg' && command !== '\\lnot') {
+      output += command;
+      index = afterCommand;
+      continue;
+    }
+    const argument =
+      afterCommand + (/^\s*/.exec(source.slice(afterCommand))?.[0].length || 0);
+    const group =
+      source[argument] === '{' ? groupEnd(source, argument) : undefined;
+    const content = group
+      ? source.slice(argument + 1, group - 1).trim()
+      : source.slice(argument);
+    const letter = /^[A-Z](?![A-Za-z])/.exec(content)?.[0];
+    if (!letter) {
+      output += command;
+      index = afterCommand;
+      continue;
+    }
+    let length = letter.length;
+    const subscript = /^\s*_\s*/.exec(content.slice(length));
+    if (subscript) {
+      const start = length + subscript[0].length;
+      const end =
+        content[start] === '{'
+          ? groupEnd(content, start)
+          : /^[A-Za-z0-9]/.test(content.slice(start))
+            ? start + 1
+            : undefined;
+      if (!end) {
+        output += command;
+        index = afterCommand;
+        continue;
+      }
+      length = end;
+    }
+    // A braced composite, a power or an adjacent word is not one proposition.
+    const end = group || argument + length;
+    if (
+      (group && content.slice(length).trim()) ||
+      /^\s*\^/.test(source.slice(end)) ||
+      /^[A-Za-z0-9_]/.test(source.slice(end))
+    ) {
+      output += command;
+      index = afterCommand;
+      continue;
+    }
+    output += '\\overline{' + content.slice(0, length) + '}';
+    index = end;
+  }
+  return output;
+}
+
 function escaped(source: string, index: number): boolean {
   let slashes = 0;
   for (let before = index - 1; before >= 0 && source[before] === '\\'; before--)
@@ -85,7 +178,7 @@ export function renderMath(expression: MathExpression): string | null {
   )
     return null;
   try {
-    return katex.renderToString(expression.text, {
+    return katex.renderToString(propositionNotation(expression.text), {
       displayMode: expression.display,
       output: 'htmlAndMathml',
       throwOnError: true,

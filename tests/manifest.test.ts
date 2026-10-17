@@ -16,6 +16,23 @@ test('production manifest opens native sidepanel with no popup and optional API 
   assert.equal(manifest.action.default_popup, undefined);
   assert.ok(!manifest.host_permissions.includes('<all_urls>'));
   assert.ok(manifest.optional_host_permissions.includes('https://*/*'));
+  const output = new URL('../.output/chrome-mv3/', import.meta.url);
+  for (const [size, path] of Object.entries(manifest.icons)) {
+    const bytes = await readFile(new URL(path as string, output));
+    assert.equal(bytes.readUInt32BE(16), Number(size));
+    assert.equal(bytes.readUInt32BE(20), Number(size));
+    assert.deepEqual(
+      bytes,
+      await readFile(new URL('../public/' + path, import.meta.url)),
+      'the installed extension receives the current artwork',
+    );
+  }
+  for (const path of Object.values(manifest.action.default_icon))
+    assert.ok(Object.values(manifest.icons).includes(path));
+  assert.match(
+    await readFile(new URL('sidepanel.html', output), 'utf8'),
+    /rel="icon"[^>]*href="\/icons\/32\.png"/,
+  );
   const background = await readFile(
     new URL('../.output/chrome-mv3/background.js', import.meta.url),
     'utf8',

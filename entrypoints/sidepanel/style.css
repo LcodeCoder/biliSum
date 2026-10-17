@@ -1721,7 +1721,7 @@ button svg {
 
 /* Video workbench: a continuous source rail and a focused reading surface. */
 .app-shell {
-  max-width: 1200px;
+  width: 100%;
   container-type: inline-size;
 }
 .app-header {
@@ -2377,6 +2377,9 @@ button:disabled {
 .focus-mode .panel-content {
   padding: 16px;
 }
+.focus-mode .reading-navigation {
+  top: -16px;
+}
 
 .generate-label {
   display: none;
@@ -2532,10 +2535,10 @@ button:disabled {
   .panel-content,
   .panel-content.map-content,
   .panel-content.html-content {
-    padding: 22px;
+    padding: clamp(22px, 1.6cqi, 32px);
   }
   .reading-navigation {
-    top: -22px;
+    top: calc(-1 * clamp(22px, 1.6cqi, 32px));
   }
   .workspace-empty {
     padding-top: 40px;
@@ -2825,9 +2828,9 @@ button:disabled {
 }
 .summary-document {
   width: 100%;
-  max-width: 78ch;
-  margin-inline: auto;
-  padding: 22px;
+  min-width: 0;
+  margin-inline: 0;
+  padding: clamp(22px, 1.6cqi, 32px);
 }
 .markdown-body {
   font-size: 14px;
@@ -2860,8 +2863,9 @@ button:disabled {
 }
 .reading-navigation {
   gap: 10px;
-  max-width: 78ch;
-  margin-inline: auto;
+  width: 100%;
+  min-width: 0;
+  margin-inline: 0;
 }
 .language-row {
   gap: 12px;

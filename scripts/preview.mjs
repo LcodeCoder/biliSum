@@ -30,19 +30,10 @@ const server = createServer(async (request, response) => {
       throw new Error('Invalid file');
     let body = await readFile(filename);
     if (filename.endsWith('sidepanel.html')) {
-      const width = Math.max(
-        280,
-        Math.min(1200, Number(url.searchParams.get('width')) || 380),
-      );
       body = Buffer.from(
         body
           .toString()
-          .replace(
-            '<head>',
-            '<head><script src="/fixture.js"></script><style>body{background:var(--bg)!important}#app{max-width:' +
-              width +
-              'px;margin:0 auto;box-shadow:0 0 0 1px var(--line)}</style>',
-          ),
+          .replace('<head>', '<head><script src="/fixture.js"></script>'),
       );
     }
     response.writeHead(200, {
