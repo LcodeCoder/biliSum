@@ -1,3 +1,4 @@
+import { appearancePalette } from '../src/lib/theme';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -75,12 +76,16 @@ test('map renderer supports all appearances and preserves the light default', ()
   const light = renderMindMapSvg(tree);
   const dark = renderMindMapSvg(tree, 'dark');
   assert.equal(light, renderMindMapSvg(tree, 'light'));
-  assert.ok(light.includes('fill="#f5f6fa"'));
+  assert.ok(
+    light.includes('fill="' + appearancePalette('light').background + '"'),
+  );
   const eye = renderMindMapSvg(tree, 'eye');
-  assert.ok(eye.includes('fill="#eee7d9"'));
-  assert.ok(eye.includes('fill="#302c24"'));
-  assert.ok(dark.includes('fill="#151720"'));
-  assert.ok(dark.includes('fill="#edf0fa"'));
+  assert.ok(eye.includes('fill="' + appearancePalette('eye').background + '"'));
+  assert.ok(eye.includes(`fill="${appearancePalette('eye').text}"`));
+  assert.ok(
+    dark.includes('fill="' + appearancePalette('dark').background + '"'),
+  );
+  assert.ok(dark.includes(`fill="${appearancePalette('dark').text}"`));
   assert.ok(light.includes('&lt;x&gt;') && dark.includes('&lt;x&gt;'));
   assert.equal(
     (light.match(/<path /g) || []).length,
@@ -88,7 +93,7 @@ test('map renderer supports all appearances and preserves the light default', ()
   );
 });
 
-test('compact layout halves a balanced tall map without losing notes or overlapping boxes', () => {
+test('default layout expands every branch rightward without losing notes or overlapping boxes', () => {
   const tree = validateMindMap({
     title: '长导图',
     children: Array.from({ length: 6 }, (_, branch) => ({
@@ -101,26 +106,24 @@ test('compact layout halves a balanced tall map without losing notes or overlapp
       })),
     })),
   });
-  const right = layoutMindMap(tree, { mode: 'right' });
-  const compact = layoutMindMap(tree, { mode: 'compact' });
-  assert.equal(compact.nodes.length, 103);
-  assert.equal(compact.edges.length, 102);
-  assert.ok(compact.height < right.height * 0.55);
-  assert.ok(compact.nodes.some((box) => box.x < compact.nodes[0]!.x));
-  for (const layout of [right, compact]) {
-    for (const [index, box] of layout.nodes.entries()) {
-      assert.ok(box.x >= 0 && box.y >= 0);
-      assert.ok(box.x + box.width <= layout.width);
-      assert.ok(box.y + box.height <= layout.height);
-      for (const other of layout.nodes.slice(index + 1))
-        assert.ok(
-          box.x + box.width <= other.x ||
-            other.x + other.width <= box.x ||
-            box.y + box.height <= other.y ||
-            other.y + other.height <= box.y,
-          'nodes must not overlap',
-        );
-    }
+  const layout = layoutMindMap(tree);
+  assert.equal(layout.nodes.length, 103);
+  assert.equal(layout.edges.length, 102);
+  assert.deepEqual(layout, layoutMindMap(tree, { mode: 'right' }));
+  for (const { from, to } of layout.edges)
+    assert.ok(to.x >= from.x + from.width, 'children expand to the right');
+  for (const [index, box] of layout.nodes.entries()) {
+    assert.ok(box.x >= 0 && box.y >= 0);
+    assert.ok(box.x + box.width <= layout.width);
+    assert.ok(box.y + box.height <= layout.height);
+    for (const other of layout.nodes.slice(index + 1))
+      assert.ok(
+        box.x + box.width <= other.x ||
+          other.x + other.width <= box.x ||
+          box.y + box.height <= other.y ||
+          other.y + other.height <= box.y,
+        'nodes must not overlap',
+      );
   }
 });
 
@@ -328,6 +331,9 @@ test('interactive SVG exposes only parent buttons and safely escapes node labels
   const full = renderMindMapSvg(tree);
   assert.ok(!full.includes('role="button"') && !full.includes('data-map-path'));
   assert.equal((full.match(/<g>/g) || []).length, 3);
+  assert.ok(full.includes('data:font/woff2;base64,'));
+  assert.ok(full.includes('<style><![CDATA['));
+  assert.ok(!svg.includes('data:font/woff2;base64,'));
 });
 
 test('long wide Latin, Chinese and composed Unicode titles wrap without splitting graphemes', () => {
@@ -356,5 +362,46 @@ test('long wide Latin, Chinese and composed Unicode titles wrap without splittin
       box.height > box.lines.length * 18,
       'all lines have vertical padding',
     );
+  }
+});
+
+test('hand drawn map uses one paper root and inherited wavy underlines in either direction', () => {
+  const tree = validateMindMap({
+    title: '思维导图软件',
+    children: [
+      {
+        title: '电脑客户端',
+        children: [{ title: 'FreeMind' }, { title: 'MindManager' }],
+      },
+      { title: '手机客户端', children: [{ title: 'MindNode' }] },
+      { title: '在线版', children: [{ title: '幕布' }] },
+    ],
+  });
+  for (const mode of ['right', 'compact'] as const) {
+    const layout = layoutMindMap(tree, { mode });
+    const svg = renderMindMapLayout(layout, tree.title);
+    assert.equal((svg.match(/class="map-root-shape"/g) || []).length, 1);
+    assert.equal(
+      (svg.match(/class="map-underline"/g) || []).length,
+      layout.nodes.length - 1,
+    );
+    assert.equal((svg.match(/map-branch map-trunk/g) || []).length, 3);
+    const byBranch = new Map<number, number>();
+    for (const node of layout.nodes.slice(1)) {
+      const previous = byBranch.get(node.branch);
+      if (previous !== undefined) assert.equal(node.side, previous);
+      byBranch.set(node.branch, node.side);
+      const underlineY = node.y + node.height - 12;
+      assert.ok(svg.includes(`d="M${node.x} ${underlineY} Q`));
+      assert.ok(svg.includes(`T${node.x + node.width} ${underlineY}"`));
+    }
+    const long = layout.nodes.find((node) => node.title === 'MindManager')!;
+    const short = layout.nodes.find((node) => node.title === '幕布')!;
+    assert.ok(long.width > short.width, 'branches fit their actual labels');
+    assert.ok(svg.includes('class="map-root-sketch"'));
+    assert.ok(svg.includes('class="map-tape"'));
+    assert.ok(svg.includes('stroke-dasharray="6 3"'));
+    assert.ok(!svg.includes('<filter'));
+    assert.ok(svg.includes("'BiliSum Hand'"));
   }
 });

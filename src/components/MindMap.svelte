@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { on } from 'svelte/events';
   import Icon from './Icon.svelte';
   import {
@@ -11,11 +11,13 @@
   import {
     fitMap,
     panMap,
+    readableMap,
     revealMapRegion,
     zoomMap,
     type MapCamera,
   } from '../lib/map-view';
   import type { Appearance, MindMapNode } from '../lib/types';
+  import { waitForHandFont } from '../lib/hand-font';
 
   let {
     tree,
@@ -35,14 +37,26 @@
       ? customExpansion.paths
       : initialExpansion,
   );
-  const layout = $derived(layoutMindMap(tree, { mode, expandedPaths }));
+  let fontRevision = $state(0);
+  const layout = $derived.by(() => {
+    void fontRevision;
+    return layoutMindMap(tree, { mode, expandedPaths });
+  });
   const svg = $derived(
     renderMindMapLayout(layout, tree.title, theme, { interactive: true }),
   );
   let viewport = $state<HTMLDivElement>();
+  let viewportSize = $state({ width: 0, height: 0 });
   let camera = $state<MapCamera>({ x: 0, y: 0, scale: 1 });
   let moving = $state(false);
-  let fitMode = true;
+  let cameraMode: 'read' | 'fit' | 'manual' = 'read';
+  const continuesRight = $derived(
+    viewportSize.width > 0 &&
+      camera.x +
+        Math.max(...layout.nodes.map((node) => node.x + node.width)) *
+          camera.scale >
+        viewportSize.width - 12,
+  );
   let drag: {
     id: number;
     x: number;
@@ -76,7 +90,7 @@
         if (candidate === path || candidate.startsWith(path + '.'))
           paths.delete(candidate);
     } else paths.add(path);
-    fitMode = false;
+    cameraMode = 'manual';
     customExpansion = { basis: initialExpansion, paths };
   }
 
@@ -86,7 +100,16 @@
       width: viewport.clientWidth,
       height: viewport.clientHeight,
     });
-    fitMode = true;
+    cameraMode = 'fit';
+  }
+
+  function initialView() {
+    if (!viewport || !viewport.clientWidth || !viewport.clientHeight) return;
+    camera = readableMap(layout, layout.nodes[0]!, {
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+    });
+    cameraMode = 'read';
   }
 
   function readSize() {
@@ -97,12 +120,12 @@
       y: viewport.clientHeight / 2 - root.y - root.height / 2,
       scale: 1,
     };
-    fitMode = false;
+    cameraMode = 'manual';
   }
 
   function zoom(factor: number, anchor?: { x: number; y: number }) {
     if (!viewport) return;
-    fitMode = false;
+    cameraMode = 'manual';
     camera = zoomMap(
       camera,
       factor,
@@ -153,7 +176,7 @@
     if (Math.hypot(dx, dy) > 6) drag.moved = true;
     if (!drag.moved) return;
     moving = true;
-    fitMode = false;
+    cameraMode = 'manual';
     camera = panMap(drag.camera, dx, dy);
   }
 
@@ -201,7 +224,7 @@
       next.y !== camera.y ||
       next.scale !== camera.scale
     ) {
-      fitMode = false;
+      cameraMode = 'manual';
       camera = next;
     }
   }
@@ -224,7 +247,7 @@
     const movement = direction[event.key];
     if (movement) {
       event.preventDefault();
-      fitMode = false;
+      cameraMode = 'manual';
       camera = panMap(camera, movement[0], movement[1]);
     } else if (event.key === '+' || event.key === '=') {
       event.preventDefault();
@@ -290,9 +313,14 @@
               .querySelector<SVGElement>(`[data-map-path="${box.path}"]`)
               ?.focus({ preventScroll: true });
         });
+      } else if (previousBasis === basis && previousMode === currentMode) {
+        // Font metrics can settle after a cached map first appears.
+        if (cameraMode === 'fit') frame = requestAnimationFrame(fit);
+        else if (cameraMode === 'read')
+          frame = requestAnimationFrame(initialView);
       } else {
-        fitMode = true;
-        frame = requestAnimationFrame(fit);
+        cameraMode = 'read';
+        frame = requestAnimationFrame(initialView);
       }
       previousBasis = basis;
       previousMode = currentMode;
@@ -306,7 +334,12 @@
     const element = viewport;
     if (!element) return;
     const observer = new ResizeObserver(() => {
-      if (fitMode) fit();
+      viewportSize = {
+        width: element.clientWidth,
+        height: element.clientHeight,
+      };
+      if (cameraMode === 'fit') fit();
+      else if (cameraMode === 'read') initialView();
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -315,6 +348,16 @@
   $effect(() => {
     if (!viewport) return;
     return on(viewport, 'wheel', wheel, { passive: false });
+  });
+
+  onMount(() => {
+    let mounted = true;
+    void waitForHandFont().then(() => {
+      if (mounted) fontRevision += 1;
+    });
+    return () => {
+      mounted = false;
+    };
   });
 </script>
 
@@ -352,6 +395,11 @@
     >
       {@html svg}
     </div>
+    {#if continuesRight}
+      <p class="map-continuation" aria-hidden="true">
+        向左拖动，查看分支 <Icon name="arrow" size={14} />
+      </p>
+    {/if}
   </div>
   <div class="map-controls">
     <div class="zoom-tools">

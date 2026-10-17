@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   fitMap,
   panMap,
+  readableMap,
   revealMapRegion,
   zoomMap,
   MIN_MAP_SCALE,
@@ -24,6 +25,53 @@ test('fit centers wide and tall maps with margins', () => {
     assert.ok(content.width * camera.scale <= viewport.width - 48 + 1e-8);
     assert.ok(content.height * camera.scale <= viewport.height - 48 + 1e-8);
   }
+});
+
+test('initial narrow maps keep reading size and the root at the left margin', () => {
+  const content = { width: 660, height: 420 };
+  const root = { x: 24, y: 178, width: 190, height: 64 };
+  for (const width of [240, 340]) {
+    const viewport = { width, height: 520 };
+    const camera = readableMap(content, root, viewport);
+    close(camera.x + root.x * camera.scale, 20);
+    close(
+      camera.y + (root.y + root.height / 2) * camera.scale,
+      viewport.height / 2,
+    );
+    assert.ok(camera.scale >= 0.88 && camera.scale <= 1);
+    assert.ok(camera.x + (root.x + root.width) * camera.scale <= width - 20);
+    if (width < content.width)
+      assert.ok(camera.scale > fitMap(content, viewport).scale);
+  }
+});
+
+test('readable maps use the complete centered overview when it remains legible', () => {
+  const content = { width: 660, height: 420 };
+  const root = { x: 24, y: 178, width: 190, height: 64 };
+  for (const width of [630, 900]) {
+    const viewport = { width, height: 520 };
+    assert.deepEqual(
+      readableMap(content, root, viewport),
+      fitMap(content, viewport, 20),
+    );
+  }
+});
+
+test('initial reading view fits an unusually long root without changing full overview', () => {
+  const content = { width: 1700, height: 2000 };
+  const root = { x: 24, y: 850, width: 306, height: 232 };
+  const viewport = { width: 240, height: 210 };
+  const camera = readableMap(content, root, viewport);
+  close(camera.x + root.x * camera.scale, 20);
+  assert.ok(camera.x + (root.x + root.width) * camera.scale <= 220);
+  assert.ok(camera.y + root.y * camera.scale >= 20);
+  assert.ok(camera.y + (root.y + root.height) * camera.scale <= 190);
+  const overview = fitMap(content, viewport);
+  assert.ok(overview.scale < camera.scale);
+  assert.ok(overview.x + content.width * overview.scale <= viewport.width - 24);
+  assert.ok(
+    overview.y + content.height * overview.scale <= viewport.height - 24,
+  );
 });
 
 test('wheel zoom preserves the diagram point under the cursor, including scale limits', () => {

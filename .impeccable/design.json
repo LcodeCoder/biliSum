@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17",
+  "title": "Design System: BiliSum",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "奶白纸张"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "墨黑文字"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "次级文字"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "虚线边界"
+      },
+      "line-soft": {
+        "role": "neutral",
+        "displayName": "笔记横线"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "深蓝绿操作色"
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "轻标记底"
+      },
+      "marker-red": {
+        "role": "secondary",
+        "displayName": "红记号笔"
+      },
+      "marker-teal": {
+        "role": "secondary",
+        "displayName": "蓝绿记号笔"
+      },
+      "marker-yellow": {
+        "role": "secondary",
+        "displayName": "黄记号笔"
+      },
+      "eye-paper": {
+        "role": "neutral",
+        "displayName": "护眼纸色"
+      },
+      "eye-ink": {
+        "role": "neutral",
+        "displayName": "护眼文字"
+      },
+      "dark-paper": {
+        "role": "neutral",
+        "displayName": "深色纸张"
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "深色文字"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "手写标题",
+        "purpose": "页面与内容标题。"
+      },
+      "body": {
+        "displayName": "阅读正文",
+        "purpose": "14px／1.85，最长72ch。"
+      },
+      "control": {
+        "displayName": "控件文字",
+        "purpose": "统一手写字体，不使用等宽体。"
+      },
+      "map-root": {
+        "displayName": "中心主题",
+        "purpose": "唯一纸片形节点。"
+      },
+      "map-topic": {
+        "displayName": "一级主题",
+        "purpose": "文字与彩色下划线。"
+      },
+      "map-detail": {
+        "displayName": "导图细节",
+        "purpose": "下级可读文本。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "small",
+        "value": "2px 2px 0 var(--marker-teal)",
+        "purpose": "普通按钮。"
+      },
+      {
+        "name": "hover",
+        "value": "3px 3px 0 var(--marker-yellow)",
+        "purpose": "悬停补笔。"
+      },
+      {
+        "name": "paper",
+        "value": "4px 4px 0 var(--marker-teal)",
+        "purpose": "离线纸片；无模糊。"
+      },
+      {
+        "name": "pressed",
+        "value": "none",
+        "purpose": "按下压平纸片。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "color",
+        "value": "180ms ease-out",
+        "purpose": "颜色状态。"
+      },
+      {
+        "name": "jitter",
+        "value": "120ms steps(2, end)",
+        "purpose": "轻微姿态变化。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation:none;transition:none;scroll-behavior:auto",
+        "purpose": "遵循系统动态偏好。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "workbench-container",
+        "value": "640px"
+      },
+      {
+        "name": "compact-container",
+        "value": "335px"
+      },
+      {
+        "name": "short-viewport",
+        "value": "650px"
+      },
+      {
+        "name": "html-columns",
+        "value": "760px"
+      }
+    ],
+    "mindMap": {
+      "direction": "right",
+      "firstLevelGap": "80px",
+      "descendantGap": "44px",
+      "initialReadableScale": 0.88,
+      "exports": "完整树、相同字体与主题色"
+    },
+    "font": {
+      "family": "BiliSum Hand",
+      "source": "Renamed LXGW WenKai Lite subset",
+      "license": "SIL Open Font License 1.1",
+      "synthesis": "weight",
+      "offline": "Embedded data font in HTML and SVG"
+    }
+  },
+  "components": [
+    {
+      "name": "生成与导出按钮",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "细虚线、硬偏移影；hover微旋转，active压平。",
+      "html": "<div class=\"ds-canvas\"><button class=\"ds-button\">导出笔记</button></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-button{min-height:34px;padding:6px 10px;border:1.5px dashed var(--text,#2c2c2c);border-radius:3px 6px 4px 5px;background:var(--surface,#fffef5);color:var(--text,#2c2c2c);font:inherit;font-size:12px;box-shadow:2px 2px 0 var(--marker-teal,#4ecdc4);cursor:pointer;transition:transform 120ms steps(2,end),color 180ms ease-out,background-color 180ms ease-out}.ds-button:hover{box-shadow:3px 3px 0 var(--marker-yellow,#ffd93d);transform:rotate(-1deg)}.ds-button:active{transform:scale(.98);box-shadow:none}.ds-button:focus-visible{outline:2px dashed var(--accent,#236e68);outline-offset:3px}.ds-button:disabled{opacity:.5;box-shadow:none;cursor:default}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "主要操作",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "黄marker底与墨色文字。",
+      "html": "<div class=\"ds-canvas\"><button class=\"ds-button ds-primary\">保存设置</button></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-button{min-height:34px;padding:6px 10px;border:1.5px dashed var(--text,#2c2c2c);border-radius:3px 6px 4px 5px;background:var(--surface,#fffef5);color:var(--text,#2c2c2c);font:inherit;font-size:12px;box-shadow:2px 2px 0 var(--marker-teal,#4ecdc4);cursor:pointer;transition:transform 120ms steps(2,end),color 180ms ease-out,background-color 180ms ease-out}.ds-button:hover{box-shadow:3px 3px 0 var(--marker-yellow,#ffd93d);transform:rotate(-1deg)}.ds-button:active{transform:scale(.98);box-shadow:none}.ds-button:focus-visible{outline:2px dashed var(--accent,#236e68);outline-offset:3px}.ds-button:disabled{opacity:.5;box-shadow:none;cursor:default}.ds-primary{background:var(--marker-yellow,#ffd93d);box-shadow:3px 3px 0 var(--marker-red,#ff6b6b)}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "搜索字段",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "纸张底、虚线边界和可见键盘焦点。",
+      "html": "<div class=\"ds-canvas\"><input class=\"ds-field\" type=\"search\" aria-label=\"查找章节\" placeholder=\"查找章节\" /></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-field{font:inherit;font-size:12px;min-height:36px;padding:7px 12px;background:var(--surface,#fffef5);color:var(--text,#2c2c2c);border:1.5px dashed var(--line,#aaa99a);border-radius:4px;box-shadow:none}.ds-field:focus-visible{outline:2px dashed var(--accent,#236e68);outline-offset:3px}.ds-field::placeholder{color:var(--muted,#626258);opacity:1}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "资源导航",
+      "kind": "nav",
+      "description": "黄色纸签表达当前页面，标签单行可读。",
+      "html": "<div class=\"ds-canvas\"><nav class=\"ds-nav\" aria-label=\"学习内容\"><button aria-current=\"page\">导图</button><button>笔记</button><button>阅读页</button></nav></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-nav{display:flex;gap:8px}.ds-nav button{font:inherit;font-size:12px;border:1px dashed transparent;border-radius:3px 6px 4px 5px;padding:6px 10px;background:transparent;color:inherit}.ds-nav [aria-current]{background:var(--marker-yellow,#ffd93d);border-color:var(--text,#2c2c2c);transform:rotate(-.6deg)}.ds-nav button:focus-visible{outline:2px dashed var(--accent,#236e68);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "阅读纸片",
+      "kind": "article",
+      "refersTo": "reading-paper",
+      "description": "正文14px／1.85；只加一条胶带。",
+      "html": "<div class=\"ds-canvas\"><article class=\"ds-paper\"><h2>信息如何变成知识</h2><p>先明确问题，再提取概念、建立连接，并通过应用和回顾检验理解。</p></article></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-paper{position:relative;max-width:72ch;padding:18px;border:1.5px dashed var(--line,#aaa99a);border-radius:3px 6px 4px 5px;background:var(--surface,#fffef5);box-shadow:3px 3px 0 var(--marker-teal,#4ecdc4)}.ds-paper:before{content:\"\";position:absolute;left:24px;top:-7px;width:58px;height:13px;background:var(--marker-yellow,#ffd93d);transform:rotate(-3deg)}.ds-paper h2{font-size:20px;line-height:1.5;margin:0 0 12px}.ds-paper p{margin:0}@media(prefers-reduced-motion:reduce){.ds-canvas *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "向右导图",
+      "kind": "figure",
+      "description": "纸片中心、彩色曲线、普通文字下划线。",
+      "html": "<div class=\"ds-canvas\"><svg viewBox=\"0 0 560 160\" role=\"img\" aria-label=\"向右展开的思维导图示意\"><path d=\"M12 48Q92 44 171 48L173 110Q93 113 13 109Z\" fill=\"var(--surface,#fffef5)\" stroke=\"var(--text,#2c2c2c)\" stroke-width=\"1.5\" stroke-dasharray=\"6 3\"/><path d=\"M173 79C208 79 215 40 253 40H344M173 79C208 79 215 120 253 120H344M344 40C363 40 370 38 388 38H490\" fill=\"none\" stroke=\"var(--marker-teal,#4ecdc4)\" stroke-width=\"2\" stroke-linecap=\"round\"/><text x=\"38\" y=\"87\" fill=\"var(--text,#2c2c2c)\" font-size=\"20\" font-weight=\"700\">视频主题</text><text x=\"265\" y=\"33\" fill=\"var(--text,#2c2c2c)\" font-size=\"16\">核心观点</text><text x=\"265\" y=\"113\" fill=\"var(--text,#2c2c2c)\" font-size=\"16\">应用示例</text><text x=\"400\" y=\"32\" fill=\"var(--text,#2c2c2c)\" font-size=\"13\">关键细节</text></svg></div>",
+      "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-canvas svg{display:block;max-width:100%;height:auto;font-family:inherit}"
+    }
+  ],
+  "narrative": {
+    "northStar": "手绘涂鸦风 / Hand-Drawn Doodle",
+    "overview": "暖纸、墨色、虚线与红／蓝绿／黄记号笔组成学习笔记本；少量胶带和微旋转保留手写感，阅读正文保持稳定。",
+    "keyCharacteristics": [
+      "BiliSum Hand正文与标题，14px／1.85阅读节奏。",
+      "细虚线、小幅不规则圆角、无模糊硬偏移影。",
+      "导图只向右，首级80px、后续44px。",
+      "浅色、护眼、深色以及离线导出共享色板与字体。"
+    ],
+    "rules": [
+      {
+        "name": "纸张边界",
+        "body": "1–2px虚线、约4px不规则圆角；不使用厚实线、大圆角或软影。",
+        "section": "shapes"
+      },
+      {
+        "name": "可读导图",
+        "body": "普通节点只保留文字和彩色下划线；初始可读比例允许右侧继续拖动。",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "使用主题token保持浅色、护眼、深色一致。",
+      "用虚线焦点、图标与文字补充颜色状态。",
+      "胶带与旋转只用于少量纸片或当前选项。"
+    ],
+    "donts": [
+      "不使用渐变、等宽字体、模糊软影和嵌套纸片。",
+      "不把每个子节点做成卡片或改成双向导图。"
+    ]
+  }
+}

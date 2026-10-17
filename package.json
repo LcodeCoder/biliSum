@@ -1,6 +1,6 @@
 {
   "name": "bilisum",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "private": true,
   "type": "module",
   "description": "Bilibili AI side panel: mind maps, Markdown/HTML summaries and subtitles",

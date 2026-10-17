@@ -13,26 +13,26 @@ const appearances = [
   {
     value: 'light',
     label: '浅色模式',
-    background: '#f5f6fa',
-    surface: '#ffffff',
-    text: '#202333',
-    tableLine: '#b7bfd2',
+    background: '#fffef5',
+    surface: '#fffef5',
+    text: '#2c2c2c',
+    tableLine: '#9b9b8e',
   },
   {
     value: 'eye',
     label: '护眼模式',
-    background: '#eee7d9',
-    surface: '#f5efdf',
-    text: '#302c24',
-    tableLine: '#b4a68d',
+    background: '#f5efdc',
+    surface: '#f5efdc',
+    text: '#38322b',
+    tableLine: '#9c9079',
   },
   {
     value: 'dark',
     label: '深色模式',
-    background: '#151720',
-    surface: '#1c1f2b',
-    text: '#edf0fa',
-    tableLine: '#626d89',
+    background: '#262923',
+    surface: '#262923',
+    text: '#f0eddd',
+    tableLine: '#929584',
   },
 ];
 const rgb = (hex) =>
@@ -41,6 +41,14 @@ const rgb = (hex) =>
     .map((index) => parseInt(hex.slice(index, index + 2), 16))
     .join(', ') +
   ')';
+const paintedBackground = (element) => {
+  // Long-form sections share the paper painted by their parent.
+  for (let paper = element; paper; paper = paper.parentElement) {
+    const color = getComputedStyle(paper).backgroundColor;
+    if (color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') return color;
+  }
+  return 'transparent';
+};
 
 before(async () => {
   server = spawn(process.execPath, ['scripts/preview.mjs'], {
@@ -101,7 +109,7 @@ async function scenario(
   try {
     await page.goto(base + '/?width=' + viewport.width + query);
     await page
-      .getByRole('button', { name: '生成 Markdown 总结', exact: true })
+      .getByRole('button', { name: '刷新当前视频和字幕', exact: true })
       .waitFor();
     if (
       !query.includes('speech=') &&
@@ -506,7 +514,7 @@ test('summary tables fill the document with readable cells and visible grids in 
           );
           for (const border of metrics.borders) {
             assert.ok(
-              border.width >= 1 && border.style === 'solid',
+              border.width >= 1 && border.style === 'dashed',
               'each row and column has a visible separator',
             );
             assert.notEqual(border.color, 'rgba(0, 0, 0, 0)');
@@ -679,6 +687,7 @@ test('all appearances fit narrow headers, persist and match Markdown, map and do
             exact: true,
           });
           await toggle.click();
+          await page.waitForTimeout(350);
           assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
           assert.equal(
             await page
@@ -708,7 +717,7 @@ test('all appearances fit narrow headers, persist and match Markdown, map and do
             await frame
               .locator('.am-panel')
               .first()
-              .evaluate((el) => getComputedStyle(el).backgroundColor),
+              .evaluate(paintedBackground),
             rgb(appearance.surface),
           );
           assert.equal(
@@ -750,8 +759,12 @@ test('all appearances fit narrow headers, persist and match Markdown, map and do
             .getByRole('tab', { name: '思维导图页面', exact: true })
             .click();
           assert.equal(
-            await page.locator('.map-drawing svg > rect').getAttribute('fill'),
-            appearance.background,
+            await page.locator('.map-root-shape').getAttribute('fill'),
+            appearance.surface,
+          );
+          assert.equal(
+            await page.locator('.map-drawing svg > rect').count(),
+            0,
           );
           if (width === 280) {
             for (const format of ['SVG', 'PNG']) {
@@ -943,6 +956,52 @@ const generateMap = async (page) => {
   });
 };
 
+// Edge anchors identify the parent and child hit areas in both interactive
+// maps and script-free exports, whose groups deliberately have no data paths.
+const rightwardMapViolations = (source) => {
+  const svg = source
+    ? new DOMParser().parseFromString(source, 'image/svg+xml').documentElement
+    : document.querySelector('.map-drawing svg');
+  const nodes = Array.from(svg.querySelectorAll('g')).map((group) => {
+    const hit = group.querySelector('.map-hit-area');
+    const x = Number(hit.getAttribute('x'));
+    const y = Number(hit.getAttribute('y'));
+    const width = Number(hit.getAttribute('width'));
+    const height = Number(hit.getAttribute('height'));
+    return {
+      x,
+      right: x + width,
+      anchor:
+        y + (group.querySelector('.map-root-shape') ? height / 2 : height - 12),
+    };
+  });
+  const edges = Array.from(svg.querySelectorAll('.map-branch'));
+  const violations = [];
+  if (edges.length !== nodes.length - 1)
+    violations.push('every non-root node must have a parent edge');
+  const near = (a, b) => Math.abs(a - b) < 0.001;
+  for (const edge of edges) {
+    const values = edge
+      .getAttribute('d')
+      .match(/-?\d+(?:\.\d+)?/g)
+      .map(Number);
+    const trunk = edge.classList.contains('map-trunk');
+    const parent = nodes.find(
+      (node) =>
+        near(node.right, values[0]) &&
+        near(node.anchor, values[1] + (trunk ? 2.8 : 0)),
+    );
+    const child = nodes.find(
+      (node) =>
+        near(node.x, values[6]) &&
+        near(node.anchor, values[7] + (trunk ? 1.2 : 0)),
+    );
+    if (!parent || !child || child.x < parent.right)
+      violations.push({ parent, child, edge: edge.getAttribute('d') });
+  }
+  return violations;
+};
+
 test('long maps gain reading space, focus by topic, preserve the camera and export the whole result', async () =>
   scenario(
     async (page) => {
@@ -957,6 +1016,7 @@ test('long maps gain reading space, focus by topic, preserve the camera and expo
         'start with the six topics',
       );
       assert.equal(await page.getByLabel('显示层级').inputValue(), '1');
+      assert.equal(await page.getByLabel('导图布局').count(), 0);
       const normal = await page.locator('.map-viewport').boundingBox();
       assert.ok(normal.height > 400);
       assert.ok(await page.locator('.map-drawing').getAttribute('style'));
@@ -995,14 +1055,11 @@ test('long maps gain reading space, focus by topic, preserve the camera and expo
       await page.getByLabel('查看主题', { exact: true }).selectOption('all');
       await page.getByLabel('显示层级').selectOption('6');
       assert.equal(await page.locator('.map-drawing svg g').count(), 103);
-      const rightHeight = Number(
-        await page.locator('.map-drawing svg').getAttribute('height'),
+      assert.deepEqual(
+        await page.evaluate(rightwardMapViolations),
+        [],
+        'every visible child starts beyond the right edge of its parent',
       );
-      await page.getByLabel('导图布局').selectOption('compact');
-      const compactHeight = Number(
-        await page.locator('.map-drawing svg').getAttribute('height'),
-      );
-      assert.ok(compactHeight < rightHeight * 0.55);
       await page.getByLabel('显示层级').selectOption('1');
       const event = page.waitForEvent('download');
       await page
@@ -1017,6 +1074,11 @@ test('long maps gain reading space, focus by topic, preserve the camera and expo
         'collapsed notes remain in exports',
       );
       assert.ok(downloaded.includes('细节3'));
+      assert.deepEqual(
+        await page.evaluate(rightwardMapViolations, downloaded),
+        [],
+        'the full exported map also sends every branch to the right',
+      );
       assert.equal(
         await page.evaluate(() => window.__biliSumFixture.stats.ai),
         1,
@@ -1036,10 +1098,47 @@ const mapCount = async (page, count) => {
   assert.equal(await page.locator('.map-node').count(), count);
 };
 
+test('narrow maps open at reading size and manual cameras survive panel resizing', async () =>
+  scenario(
+    async (page) => {
+      await generateMap(page);
+      const initialScale = parseInt(
+        await page.locator('.zoom-value').innerText(),
+        10,
+      );
+      assert.ok(initialScale >= 85, 'initial text remains readable');
+      const viewport = await page.locator('.map-viewport').boundingBox();
+      const root = await mapNode(page, '0').boundingBox();
+      assert.ok(root.x >= viewport.x + 12);
+      assert.ok(root.x + root.width <= viewport.x + viewport.width - 12);
+      assert.equal(await page.locator('.map-continuation').isVisible(), true);
+      await page.getByRole('button', { name: '适应画布', exact: true }).click();
+      assert.ok(
+        parseInt(await page.locator('.zoom-value').innerText(), 10) <
+          initialScale,
+        'full overview is a separate explicit action',
+      );
+      assert.equal(await page.locator('.map-continuation').count(), 0);
+      await page.locator('.map-viewport').focus();
+      await page.keyboard.press('ArrowRight');
+      const manual = await page.locator('.map-drawing').getAttribute('style');
+      await page.setViewportSize({ width: 380, height: 900 });
+      await page.waitForTimeout(100);
+      assert.equal(
+        await page.locator('.map-drawing').getAttribute('style'),
+        manual,
+        'resizing keeps the manually chosen map position and scale',
+      );
+    },
+    '&map=reference',
+    { width: 280, height: 900 },
+  ));
+
 test('parent clicks reveal only the next layer, keep siblings independent and reset with depth presets', async () =>
   scenario(
     async (page) => {
       await generateMap(page);
+      await page.getByRole('button', { name: '适应画布', exact: true }).click();
       await mapNode(page, '0.0').click();
       await mapCount(page, 11);
       assert.equal(
@@ -1094,8 +1193,6 @@ test('parent clicks reveal only the next layer, keep siblings independent and re
         await page.locator('.map-drawing').getAttribute('style'),
         camera,
       );
-      await page.getByLabel('导图布局').selectOption('compact');
-      await mapCount(page, 14);
       await page.getByRole('button', { name: '适应画布', exact: true }).click();
       await mapNode(page, '0.1').click();
       await mapCount(page, 18);
@@ -1152,6 +1249,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
   scenario(
     async (page) => {
       await generateMap(page);
+      await mapNode(page, '0.0').focus();
       const before = await page.locator('.map-drawing').getAttribute('style');
       const box = await mapNode(page, '0.0').boundingBox();
       const x = box.x + box.width / 2,
@@ -1237,6 +1335,7 @@ test('touch taps expand once and cancelled touches leave the tree unchanged', as
   scenario(
     async (page, context) => {
       await generateMap(page);
+      await page.getByRole('button', { name: '适应画布', exact: true }).click();
       let box = await mapNode(page, '0.0').boundingBox();
       const session = await context.newCDPSession(page);
       await session.send('Input.dispatchTouchEvent', {
@@ -1264,14 +1363,14 @@ test('touch taps expand once and cancelled touches leave the tree unchanged', as
     { hasTouch: true },
   ));
 
-test('node backgrounds contain all real glyphs and hints in both themes and full SVG exports', async () =>
+test('organic node hit areas contain all real glyphs and toggles in both themes and full SVG exports', async () =>
   scenario(
     async (page) => {
       await generateMap(page);
       const overflow = () =>
         Array.from(document.querySelectorAll('.map-drawing .map-node')).flatMap(
           (node) => {
-            const rect = node.querySelector('rect').getBBox();
+            const rect = node.querySelector('.map-hit-area').getBBox();
             return Array.from(node.querySelectorAll('text')).flatMap((text) => {
               const box = text.getBBox();
               return box.x >= rect.x + 5 &&
@@ -1290,6 +1389,19 @@ test('node backgrounds contain all real glyphs and hints in both themes and full
           },
         );
       await page.evaluate(() => document.fonts.ready);
+      assert.equal(await page.locator('.map-root-shape').count(), 1);
+      assert.equal(
+        await page.locator('.map-underline').count(),
+        (await page.locator('.map-node').count()) - 1,
+      );
+      assert.ok(
+        await page
+          .locator('.map-hit-area')
+          .evaluateAll((nodes) =>
+            nodes.every((node) => node.getAttribute('fill') === 'transparent'),
+          ),
+      );
+
       for (const theme of ['light', 'dark']) {
         if (theme === 'dark')
           await page
@@ -1300,7 +1412,7 @@ test('node backgrounds contain all real glyphs and hints in both themes and full
           assert.deepEqual(
             await page.evaluate(overflow),
             [],
-            theme + ': all titles and fold hints stay inside their backgrounds',
+            theme + ': all titles and fold hints stay inside their hit areas',
           );
         }
       }
@@ -1320,7 +1432,7 @@ test('node backgrounds contain all real glyphs and hints in both themes and full
           document.body.append(node);
           try {
             return Array.from(node.querySelectorAll('g')).flatMap((group) => {
-              const rect = group.querySelector('rect').getBBox();
+              const rect = group.querySelector('.map-hit-area').getBBox();
               const text = group.querySelector('text').getBBox();
               return text.x >= rect.x + 5 &&
                 text.y >= rect.y + 5 &&
@@ -1449,7 +1561,7 @@ test('distribution uses actual node counts, topic navigation and theme changes p
       camera,
     );
     assert.ok(
-      (await page.locator('.map-drawing').innerHTML()).includes('#151720'),
+      (await page.locator('.map-drawing').innerHTML()).includes('#262923'),
     );
     await page.getByRole('button', { name: '护眼模式', exact: true }).click();
     assert.equal(
@@ -1457,7 +1569,7 @@ test('distribution uses actual node counts, topic navigation and theme changes p
       camera,
     );
     assert.ok(
-      (await page.locator('.map-drawing').innerHTML()).includes('#eee7d9'),
+      (await page.locator('.map-drawing').innerHTML()).includes('#f5efdc'),
     );
     await page.getByRole('button', { name: '分布视图', exact: true }).click();
     assert.deepEqual(
@@ -1569,10 +1681,10 @@ test('dropdowns and compound inputs share styles without clipping in narrow, wid
           const check = (controls, height) => {
             assert.ok(controls.length);
             for (const control of controls) {
-              assert.equal(control.radius, '7px');
+              assert.equal(control.radius, '4px');
               assert.equal(control.font, '12px');
               assert.equal(control.height, height);
-              assert.equal(control.border, 'solid');
+              assert.equal(control.border, 'dashed');
               assert.ok(control.left >= 0 && control.right <= width);
             }
           };
@@ -1580,12 +1692,13 @@ test('dropdowns and compound inputs share styles without clipping in narrow, wid
           const mapControls = await metrics(
             page.locator('.analysis-filters select'),
           );
+          assert.equal(mapControls.length, 2);
           check(mapControls, 32);
           assert.ok(
             mapControls.every(
               (control) =>
                 control.appearance === 'none' &&
-                control.arrow.includes('linear-gradient'),
+                control.arrow.includes('data:image/svg+xml'),
             ),
           );
           await page
@@ -2107,6 +2220,7 @@ test('HTML hides renderer source in every layout, theme and appearance, includin
               exact: true,
             })
             .click();
+          await page.waitForTimeout(350);
           await waitReportAttribute(page, 'data-appearance', appearance);
           const frame = reportFrame(page);
           const expected = appearances.find(
@@ -2122,7 +2236,7 @@ test('HTML hides renderer source in every layout, theme and appearance, includin
             await frame
               .locator('.am-panel')
               .first()
-              .evaluate((el) => getComputedStyle(el).backgroundColor),
+              .evaluate(paintedBackground),
             rgb(expected.surface),
           );
           await frame.locator('.am-colophon').scrollIntoViewIfNeeded();
@@ -3116,8 +3230,9 @@ test('empty and unsupported video states give working preparation actions in a s
       assert.equal(
         await page
           .getByRole('button', { name: '生成思维导图', exact: true })
-          .isEnabled(),
-        false,
+          .count(),
+        0,
+        'unsupported pages show preparation actions rather than unavailable generation',
       );
       await page
         .getByRole('button', { name: '重新读取当前页', exact: true })
@@ -3482,3 +3597,58 @@ test('shorter current-CID audio completes decoding, exports real end time and re
       true,
     );
   }, '&speech=whisper&speechDuration=220&audioDuration=212'));
+
+test('doodle controls use ink outlines, paper press and a locally embedded handwriting font', async () =>
+  scenario(
+    async (page) => {
+      await page.evaluate(() => document.fonts.load('16px "BiliSum Hand"'));
+      assert.equal(
+        await page.evaluate(() => document.fonts.check('16px "BiliSum Hand"')),
+        true,
+      );
+      const button = page.getByRole('button', {
+        name: '打开 API 设置',
+        exact: true,
+      });
+      await page.mouse.move(0, 0);
+      const normal = await button.evaluate((node) => ({
+        border: getComputedStyle(node).borderTopStyle,
+        family: getComputedStyle(node).fontFamily,
+        transform: getComputedStyle(node).transform,
+      }));
+      assert.equal(normal.border, 'dashed');
+      assert.match(normal.family, /BiliSum Hand/);
+      await button.hover();
+      await page.waitForTimeout(250);
+      const hover = await button.evaluate(
+        (node) => getComputedStyle(node).boxShadow,
+      );
+      assert.ok(
+        hover !== 'none' && !hover.includes('inset'),
+        'hover has a hard marker offset',
+      );
+      await page.mouse.down();
+      await page.waitForTimeout(250);
+      assert.equal(
+        await button.evaluate((node) => getComputedStyle(node).boxShadow),
+        'none',
+        'paper press removes the marker offset',
+      );
+      await page.mouse.up();
+      const field = page.getByLabel('API 地址', { exact: true });
+      await field.waitFor();
+      await field.focus();
+      const focused = await field.evaluate((node) => ({
+        border: getComputedStyle(node).borderTopStyle,
+        shadow: getComputedStyle(node).boxShadow,
+        outline: getComputedStyle(node).outlineStyle,
+        width: getComputedStyle(node).outlineWidth,
+      }));
+      assert.equal(focused.border, 'dashed');
+      assert.equal(focused.shadow, 'none');
+      assert.equal(focused.outline, 'dashed');
+      assert.equal(focused.width, '2px');
+    },
+    '',
+    { width: 380, height: 900 },
+  ));

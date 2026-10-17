@@ -898,17 +898,16 @@
   function downloadMap(format: 'svg' | 'png') {
     if (!map) return;
     const tree = $state.snapshot(map.tree);
-    void perform(
-      () =>
-        format === 'svg'
-          ? downloadText(
-              renderMindMapSvg(tree, appearance),
-              filename('-思维导图.svg'),
-              'image/svg+xml;charset=utf-8',
-            )
-          : downloadMapPng(tree, filename('-思维导图.png'), appearance),
-      '已开始下载思维导图',
-    );
+    void perform(async () => {
+      await document.fonts.load('16px "BiliSum Hand"');
+      return format === 'svg'
+        ? downloadText(
+            renderMindMapSvg(tree, appearance),
+            filename('-思维导图.svg'),
+            'image/svg+xml;charset=utf-8',
+          )
+        : downloadMapPng(tree, filename('-思维导图.png'), appearance);
+    }, '已开始下载思维导图');
   }
   function downloadOutline() {
     if (!map) return;
@@ -1257,27 +1256,27 @@
           {#if sourceChunks > 1}<p class="source-notice">
               字幕分 {sourceChunks} 段处理，首次需 {sourceChunks + 1} 次请求。
             </p>{/if}
-          <div class="detail-control">
-            <div class="detail-heading">
-              <label for="summary-detail">总结细腻程度</label>
-              <output for="summary-detail">{detail.label}</output>
-            </div>
-            <input
-              id="summary-detail"
-              type="range"
-              min="1"
-              max="5"
-              step="1"
-              value={settings.detailLevel}
-              disabled={!!busy}
-              aria-valuetext={detail.label}
-              title="用于下一次生成的思维导图、Markdown 总结和 HTML 阅读页"
-              style:--range-progress={(settings.detailLevel - 1) * 25 + '%'}
-              oninput={(event) => changeDetail(event.currentTarget.value)}
-              onchange={persistPreferences}
-            />
-            <div class="detail-range"><span>精简</span><span>详尽</span></div>
-          </div>
+          {#if video}<div class="detail-control">
+              <div class="detail-heading">
+                <label for="summary-detail">总结细腻程度</label>
+                <output for="summary-detail">{detail.label}</output>
+              </div>
+              <input
+                id="summary-detail"
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={settings.detailLevel}
+                disabled={!!busy}
+                aria-valuetext={detail.label}
+                title="用于下一次生成的思维导图、Markdown 总结和 HTML 阅读页"
+                style:--range-progress={(settings.detailLevel - 1) * 25 + '%'}
+                oninput={(event) => changeDetail(event.currentTarget.value)}
+                onchange={persistPreferences}
+              />
+              <div class="detail-range"><span>精简</span><span>详尽</span></div>
+            </div>{/if}
           {#if settingsReady && !settings.apiKey && video && transcript && !busy}<div
               class="setup-hint"
             >
@@ -1289,85 +1288,85 @@
               >
             </div>{/if}
         </details>
-        <div
-          class="generation-actions"
-          class:source-collapsed={!setupOpen}
-          aria-label="生成操作"
-        >
-          <div class="resource-heading">
-            <span
-              ><span class="source-step" aria-hidden="true">02</span
-              >视频资源</span
-            ><span>选择并生成</span>
-          </div>
-          {#each resources as resource (resource.kind)}
-            <div
-              class="resource-row"
-              class:chosen={page === resource.kind}
-              class:complete={hasResource(resource.kind)}
-            >
-              <button
-                class="resource-select"
-                onclick={() => switchPage(resource.kind)}
-                aria-label={'查看' + resource.title}
-                aria-current={page === resource.kind ? 'page' : undefined}
-              >
-                <span class="resource-symbol"
-                  ><Icon name={resource.icon} size={19} /></span
-                >
-                <span class="resource-info"
-                  ><strong>{resource.title}</strong></span
-                >
-                <span
-                  class="resource-status"
-                  class:done={hasResource(resource.kind)}
-                  >{busy === resource.kind
-                    ? '生成中'
-                    : hasResource(resource.kind)
-                      ? '已完成'
-                      : transcript
-                        ? '可生成'
-                        : '待字幕'}</span
-                >
-              </button>
-              <button
-                class="generate-button"
-                onclick={() => generate(resource.kind)}
-                disabled={!canGenerate}
-                aria-label={resource.label}
-                title={hasResource(resource.kind)
-                  ? '重新' + resource.label
-                  : resource.label}
-                ><Icon
-                  name={busy === resource.kind
-                    ? 'loader'
-                    : hasResource(resource.kind)
-                      ? 'refresh'
-                      : 'plus'}
-                  size={17}
-                /><span class="generate-label"
-                  >{hasResource(resource.kind)
-                    ? '重做'
-                    : '生成'}{resource.kind === 'map'
-                    ? '导图'
-                    : resource.kind === 'summary'
-                      ? '笔记'
-                      : '阅读页'}</span
-                ></button
-              >
-            </div>
-          {/each}
-          <button
-            class="resource-subtitles"
-            onclick={() => switchPage('subtitles')}
-            aria-label="查看字幕来源"
-            ><Icon name="subtitles" size={16} /><span>字幕来源</span><span
-              >{transcript
-                ? transcript.cues.length + ' 条'
-                : '识别或导入'}</span
-            ><Icon name="arrow" size={14} /></button
+        {#if video}<div
+            class="generation-actions"
+            class:source-collapsed={!setupOpen}
+            aria-label="生成操作"
           >
-        </div>
+            <div class="resource-heading">
+              <span
+                ><span class="source-step" aria-hidden="true">02</span
+                >视频资源</span
+              ><span>选择并生成</span>
+            </div>
+            {#each resources as resource (resource.kind)}
+              <div
+                class="resource-row"
+                class:chosen={page === resource.kind}
+                class:complete={hasResource(resource.kind)}
+              >
+                <button
+                  class="resource-select"
+                  onclick={() => switchPage(resource.kind)}
+                  aria-label={'查看' + resource.title}
+                  aria-current={page === resource.kind ? 'page' : undefined}
+                >
+                  <span class="resource-symbol"
+                    ><Icon name={resource.icon} size={19} /></span
+                  >
+                  <span class="resource-info"
+                    ><strong>{resource.title}</strong></span
+                  >
+                  <span
+                    class="resource-status"
+                    class:done={hasResource(resource.kind)}
+                    >{busy === resource.kind
+                      ? '生成中'
+                      : hasResource(resource.kind)
+                        ? '已完成'
+                        : transcript
+                          ? '可生成'
+                          : '待字幕'}</span
+                  >
+                </button>
+                <button
+                  class="generate-button"
+                  onclick={() => generate(resource.kind)}
+                  disabled={!canGenerate}
+                  aria-label={resource.label}
+                  title={hasResource(resource.kind)
+                    ? '重新' + resource.label
+                    : resource.label}
+                  ><Icon
+                    name={busy === resource.kind
+                      ? 'loader'
+                      : hasResource(resource.kind)
+                        ? 'refresh'
+                        : 'plus'}
+                    size={17}
+                  /><span class="generate-label"
+                    >{hasResource(resource.kind)
+                      ? '重做'
+                      : '生成'}{resource.kind === 'map'
+                      ? '导图'
+                      : resource.kind === 'summary'
+                        ? '笔记'
+                        : '阅读页'}</span
+                  ></button
+                >
+              </div>
+            {/each}
+            <button
+              class="resource-subtitles"
+              onclick={() => switchPage('subtitles')}
+              aria-label="查看字幕来源"
+              ><Icon name="subtitles" size={16} /><span>字幕来源</span><span
+                >{transcript
+                  ? transcript.cues.length + ' 条'
+                  : '识别或导入'}</span
+              ><Icon name="arrow" size={14} /></button
+            >
+          </div>{/if}
       </aside>
       {#if !online}<div class="offline-banner" role="status">
           <Icon name="offline" size={16} /><span
@@ -1387,7 +1386,7 @@
           class:problem={sourceProblem}
           role={sourceProblem ? 'alert' : 'status'}
         >
-          {sourceNotice}<button
+          <span>{sourceNotice}</span><button
             class="text-button"
             onclick={() => (page = 'subtitles')}>查看字幕</button
           >
@@ -1429,19 +1428,23 @@
         </Tabs.List>
       </nav>
       {#if error}<div class="error-banner" role="alert">
-          <Icon name="alert" size={17} />
-          <p>{error}</p>
-          {#if retryKind}<button
-              class="text-button"
-              disabled={!canGenerate}
-              onclick={() => generate(retryKind!)}>重新生成</button
-            >{/if}
-          <button
-            class="icon-button tiny"
-            onclick={() => (error = '')}
-            aria-label="关闭错误提示"
-            title="关闭提示"><Icon name="x" size={14} /></button
-          >
+          <div class="error-message">
+            <Icon name="alert" size={17} />
+            <p>{error}</p>
+            <button
+              class="icon-button tiny"
+              onclick={() => (error = '')}
+              aria-label="关闭错误提示"
+              title="关闭提示"><Icon name="x" size={14} /></button
+            >
+          </div>
+          {#if retryKind}<div class="error-actions">
+              <button
+                class="text-button"
+                disabled={!canGenerate}
+                onclick={() => generate(retryKind!)}>重新生成</button
+              >
+            </div>{/if}
         </div>{/if}
       <main
         class="panel-content"

@@ -38,6 +38,7 @@ export async function downloadMapPng(
   filename: string,
   appearance: Appearance = 'light',
 ): Promise<void> {
+  await document.fonts.load('16px "BiliSum Hand"');
   const layout = layoutMindMap(tree);
   const image = new Image();
   const url = URL.createObjectURL(

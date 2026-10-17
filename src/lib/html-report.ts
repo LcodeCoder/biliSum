@@ -6,6 +6,7 @@ import { detailProfile } from './detail';
 import { formatTime } from './transcript';
 import type { Appearance, HtmlResult, MindMapNode, VideoInfo } from './types';
 import { reportThemeVariables } from './theme';
+import { HAND_FONT_FACE, HAND_FONT_FAMILY } from './hand-font';
 
 export type HtmlReportLayout = 'sheet' | 'doc';
 export type HtmlReportTheme = 'shadcn' | 'paper' | 'blueprint';
@@ -21,8 +22,8 @@ const CSP = [
   "default-src 'none'",
   "script-src 'none'",
   "style-src 'unsafe-inline'",
-  "img-src 'none'",
-  "font-src 'none'",
+  'img-src data:',
+  'font-src data:',
   "connect-src 'none'",
   "frame-src 'none'",
   "object-src 'none'",
@@ -174,6 +175,9 @@ export function createHtmlReport(input: HtmlReportInput): string {
   doc
     .querySelectorAll('script, .am-toolbar, .am-lightbox, #am-source')
     .forEach((node) => node.remove());
+  doc
+    .querySelector('.am-colophon')
+    ?.replaceChildren(doc.createTextNode('biliSum · 视频阅读页'));
   const header = doc.querySelector<HTMLElement>('.am-head');
   if (header) header.style.paddingInlineEnd = '0';
   for (const paragraph of doc.querySelectorAll('.am-panel-body .am-md > p')) {
@@ -281,12 +285,340 @@ export function createHtmlReport(input: HtmlReportInput): string {
   // Selection, keyboard focus and scrollbars also follow the offline palette.
   const readingStyles = doc.createElement('style');
   readingStyles.textContent = `
+    ${HAND_FONT_FACE}
+    html[data-appearance] { --font-hand: ${HAND_FONT_FAMILY}; }
+    html[data-appearance] body {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.85;
+      font-synthesis: weight;
+      background-color: var(--bg);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='28' viewBox='0 0 160 28'%3E%3Cpath d='M0 27.5h160' fill='none' stroke='%234ecdc4' stroke-opacity='.17' stroke-width='1'/%3E%3C/svg%3E");
+      background-size: 160px 28px;
+    }
     ::selection { background: var(--accent-bg); color: var(--ink); }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    :focus-visible { outline: 2px dashed var(--accent); outline-offset: 4px; }
     html { scrollbar-color: var(--ink-3) var(--bg); }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 3px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
+    html[data-appearance] :is(.am-sheet, .am-doc) {
+      padding-inline: clamp(16px, 3vw, 28px);
+      padding-block-end: 32px;
+    }
+    html[data-appearance] .am-head { margin-bottom: 28px; }
+    html[data-appearance] .am-head h1 {
+      font-family: var(--font-hand, 'BiliSum Hand', var(--font-sans));
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.5;
+      letter-spacing: 0;
+      text-wrap: balance;
+      text-decoration: underline wavy var(--marker-red, #ff6b6b);
+      text-decoration-thickness: 1.5px;
+      text-underline-offset: 6px;
+      transform: rotate(-0.35deg);
+      transform-origin: left center;
+    }
+    html[data-appearance] .am-sub {
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    html[data-appearance] .am-grid {
+      display: block;
+      columns: 2;
+      column-gap: 22px;
+    }
+    html[data-appearance] .am-grid > .am-panel {
+      margin-bottom: 22px;
+      break-inside: avoid;
+    }
+    html[data-appearance] .am-grid > .am-panel.am-span-wide { column-span: all; }
+    html[data-appearance] .am-panel {
+      position: relative;
+      border: 2px dashed var(--ink);
+      border-radius: 4px 3px 5px 3px;
+      background: var(--paper);
+      box-shadow: 4px 4px 0 var(--marker-teal, #4ecdc4);
+      overflow: visible;
+    }
+    html[data-appearance] .am-grid > .am-panel:nth-child(3n + 1) {
+      transform: rotate(-0.18deg);
+    }
+    html[data-appearance] .am-grid > .am-panel:nth-child(3n + 2) {
+      transform: rotate(0.15deg);
+    }
+    html[data-appearance] .am-grid > .am-panel:first-child::before {
+      content: '';
+      position: absolute;
+      width: 58px;
+      height: 13px;
+      top: -8px;
+      left: 18px;
+      border: 1px dashed var(--ink-2);
+      border-radius: 2px 3px 2px 4px;
+      background: var(--marker-yellow, #ffd93d);
+      transform: rotate(-4deg);
+      pointer-events: none;
+    }
+    html[data-appearance] .am-panel-head {
+      min-height: 0;
+      padding: 18px 18px 0;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+    }
+    html[data-appearance] .am-panel-id { display: none; }
+    html[data-appearance] .am-panel-head h2 {
+      padding: 0;
+      color: var(--ink);
+      font-family: var(--font-hand, 'BiliSum Hand', var(--font-sans));
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.5;
+      text-wrap: balance;
+    }
+    html[data-appearance] .am-panel-body { padding: 10px 18px 18px; }
+    html[data-appearance] :is(.am-md, .am-intro, .am-callout) {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.85;
+    }
+    html[data-appearance] .am-md :is(p, li, blockquote) {
+      font-size: inherit;
+      line-height: inherit;
+    }
+    html[data-appearance] .am-md p { margin: 0 0 12px; }
+    html[data-appearance] .am-md :is(ul, ol) {
+      padding-inline-start: 1.5em;
+      margin: 0 0 14px;
+    }
+    html[data-appearance] .am-md li + li { margin-top: 6px; }
+    html[data-appearance] .am-md :is(h1, h2, h3, h4) {
+      margin: 24px 0 10px;
+      font-family: var(--font-hand, 'BiliSum Hand', var(--font-sans));
+      font-weight: 700;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+    html[data-appearance] .am-md h1 { font-size: 23px; }
+    html[data-appearance] .am-md h2 { font-size: 21px; }
+    html[data-appearance] .am-md h3 { font-size: 19px; }
+    html[data-appearance] .am-md h4 { font-size: 17px; }
+    html[data-appearance] .am-md > :first-child { margin-top: 0; }
+    html[data-appearance] .am-md > :last-child { margin-bottom: 0; }
+    html[data-appearance] a {
+      text-decoration-style: wavy;
+      text-underline-offset: 4px;
+      text-decoration-thickness: 1px;
+    }
+    html[data-appearance] a:hover {
+      color: var(--ink);
+      text-decoration-color: var(--marker-red, #ff6b6b);
+      text-decoration-thickness: 2px;
+    }
+    html[data-appearance] a:active { text-decoration-color: var(--marker-teal, #4ecdc4); }
+    html[data-appearance] .am-callout {
+      border: 0;
+      padding: 0;
+      border-radius: 4px;
+      background: transparent;
+      box-shadow: none;
+      color: var(--ink);
+    }
+    html[data-appearance] .am-callout-title { display: none; }
+    html[data-appearance] .am-md blockquote {
+      margin: 16px 0;
+      padding: 10px 0;
+      border-inline: 0;
+      border-block: 1px dashed var(--line);
+      background: transparent;
+      color: var(--ink-2);
+    }
+    html[data-appearance] .am-md hr {
+      border: 0;
+      border-top: 1px dashed var(--line);
+    }
+    html[data-appearance] .am-table-wrap {
+      max-width: 100%;
+      margin: 16px 0;
+      overscroll-behavior-inline: contain;
+    }
+    html[data-appearance] .am-md table {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.7;
+      font-variant-numeric: tabular-nums;
+      background: var(--paper);
+    }
+    html[data-appearance] .am-md :is(th, td) {
+      min-width: 7em;
+      padding: 10px 12px;
+      border-bottom: 1px dashed var(--line);
+      vertical-align: top;
+    }
+    html[data-appearance] .am-md th {
+      font: 650 13px/1.7 var(--font-sans);
+      color: var(--ink);
+      background: var(--accent-bg);
+    }
+    html[data-appearance] .am-md :is(th, td) > :last-child { margin-bottom: 0; }
+    html[data-appearance] :is(code, pre, kbd, .am-tree-tag, .am-lim-val, .am-lim-ticks) {
+      font-family: var(--font-sans);
+    }
+    html[data-appearance] .am-md :not(pre) > code {
+      border-radius: 3px 2px 4px 2px;
+      background: var(--fill);
+    }
+    html[data-appearance] .am-code {
+      border: 1px dashed var(--line);
+      border-radius: 4px 3px 5px 3px;
+      padding: 14px;
+      background: var(--paper);
+      box-shadow: none;
+      font-size: 12px;
+      line-height: 1.75;
+    }
+    html[data-appearance] .am-doc { max-width: 1120px; }
+    html[data-appearance] .am-doc-layout { gap: 28px; }
+    html[data-appearance] .am-doc-body { max-width: 72ch; }
+    html[data-appearance] .am-doc-body > .am-panel {
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      box-shadow: none;
+    }
+    html[data-appearance] .am-doc-body > .am-panel + .am-panel {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px dashed var(--line);
+    }
+    html[data-appearance] .am-doc-body .am-panel-head { padding: 0; }
+    html[data-appearance] .am-doc-body .am-panel-head h2 {
+      text-decoration: underline wavy var(--marker-teal, #4ecdc4);
+      text-underline-offset: 5px;
+      text-decoration-thickness: 1px;
+    }
+    html[data-appearance] .am-doc-body .am-panel-body { padding: 12px 0 0; }
+    html[data-appearance] .am-toc {
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    html[data-appearance] .am-toc a {
+      padding-block: 6px;
+      border-inline-start: 1px dashed var(--line);
+      text-decoration: none;
+    }
+    html[data-appearance] .am-toc a:hover {
+      border-inline-start-color: var(--marker-red, #ff6b6b);
+      text-decoration: underline wavy var(--marker-red, #ff6b6b);
+    }
+    html[data-appearance] .am-kv {
+      border: 0;
+      border-top: 1px dashed var(--line);
+      border-inline-start: 1px dashed var(--line);
+      border-radius: 4px 3px 4px 2px;
+    }
+    html[data-appearance] .am-kv-cell {
+      border: 0;
+      border-inline-end: 1px dashed var(--line);
+      border-bottom: 1px dashed var(--line);
+    }
+    html[data-appearance] .am-kv dt { font: 12px/1.6 var(--font-sans); }
+    html[data-appearance] .am-kv dd {
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    html[data-appearance] .am-kv-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    html[data-appearance] .am-lim-head {
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      line-height: 1.6;
+    }
+    html[data-appearance] :is(.am-lim-val, .am-lim-ticks) { font-variant-numeric: tabular-nums; }
+    html[data-appearance] .am-lim-ticks { font-size: 11px; }
+    html[data-appearance] .am-lim-ticks span { white-space: nowrap; }
+    html[data-appearance] .am-lim-ticks span:last-child { transform: translateX(-100%); }
+    html[data-appearance] .am-lim-track {
+      height: 10px;
+      border: 1px dashed var(--line);
+      border-radius: 3px 2px 4px 2px;
+      background: var(--paper);
+    }
+    html[data-appearance] .am-lim-fill {
+      border-inline-end: 1px dashed var(--ink);
+      border-radius: 2px 3px 2px 4px;
+      background: var(--marker-teal, #4ecdc4);
+    }
+    html[data-appearance] .am-lim-mark { border-left: 1px dashed var(--ink); }
+    html[data-appearance] .am-tree-box {
+      border: 1px dashed var(--ink);
+      border-radius: 4px 3px 5px 2px;
+      background: var(--paper);
+    }
+    html[data-appearance] .am-tree-box--root { background: var(--accent-bg); }
+    html[data-appearance] .am-tree-root::after,
+    html[data-appearance] .am-tree-col::after,
+    html[data-appearance] .am-tree-list li::after {
+      border: 0;
+      border-inline-start: 1px dashed var(--ink-3);
+    }
+    html[data-appearance] .am-tree-col::before,
+    html[data-appearance] .am-tree-list li::before {
+      border: 0;
+      border-top: 1px dashed var(--ink-3);
+    }
+    html[data-appearance] .am-colophon {
+      padding: 0 16px 24px;
+      font: 12px/1.7 var(--font-sans);
+      color: var(--ink-2);
+    }
+    html[data-appearance] .am-frame { border-radius: 4px 3px 5px 3px; }
+    html[data-appearance][data-theme="blueprint"] .am-frame { border-style: dashed; }
+    html[data-appearance] .am-frame::before {
+      border-color: var(--line);
+      border-style: dashed;
+      border-radius: 3px 4px 2px 4px;
+    }
+    html[data-appearance] .am-ruler {
+      font-family: var(--font-sans);
+      background: var(--bg);
+    }
+    html[data-appearance] .am-ruler--top span + span,
+    html[data-appearance] .am-ruler--bottom span + span { border-inline-start-style: dashed; }
+    html[data-appearance] .am-ruler--left span + span,
+    html[data-appearance] .am-ruler--right span + span { border-top-style: dashed; }
+    html[data-appearance] .am-panel--bare {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    @media (max-width: 760px) {
+      html[data-appearance] .am-doc-layout { gap: 24px; }
+      html[data-appearance] .am-grid { columns: 1; }
+    }
+    @media (max-width: 360px) {
+      html[data-appearance] :is(.am-sheet, .am-doc) { padding-inline: 12px; }
+      html[data-appearance] .am-head h1 { font-size: 22px; }
+      html[data-appearance] .am-panel-head { padding: 16px 14px 0; }
+      html[data-appearance] .am-panel-body { padding: 10px 14px 16px; }
+      html[data-appearance] .am-grid { gap: 20px; }
+      html[data-appearance] .am-doc-body .am-panel-head { padding: 0; }
+      html[data-appearance] .am-doc-body .am-panel-body { padding: 10px 0 0; }
+      html[data-appearance] .am-kv { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media print {
+      html[data-appearance] body { background-image: none; }
+      html[data-appearance] .am-panel { box-shadow: none; }
+      html[data-appearance] .am-grid > .am-panel:nth-child(n) { transform: none; }
+      html[data-appearance] .am-grid { columns: 1; }
+      html[data-appearance] .am-grid > .am-panel:first-child::before { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; }
+    }
   `;
   doc.head.append(readingStyles);
   // Long literal words must wrap, including titles, metadata and tree labels.

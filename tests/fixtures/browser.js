@@ -111,84 +111,115 @@
     },
   ];
   const fixtureMap =
-    parameters.get('map') === 'text'
+    parameters.get('map') === 'reference'
       ? {
-          title: '中英文长标题：HTTP WWW MQTT 与 OSI 七层模型'.repeat(2),
+          title: '思维导图软件',
           children: [
             {
-              title: 'WWWWMMMMWWWWMMMMWWWWMMMMWWW',
+              title: '电脑客户端',
               children: [
-                {
-                  title:
-                    'https://very-long-domain.example/api/v1/chat/completions?network=TCP',
-                  children: [],
-                },
-              ],
+                '亿图脑图 MindMaster',
+                'FreeMind',
+                'MindManager',
+                'XMind',
+              ].map((title) => ({ title, children: [] })),
             },
             {
-              title:
-                '网络层负责贴上地址并根据路由表决定跨网络的传输路线'.repeat(3),
-              children: [],
+              title: '手机客户端',
+              children: ['MindVector', 'MindNode', 'Mindly'].map((title) => ({
+                title,
+                children: [],
+              })),
             },
             {
-              title: '👨‍👩‍👦 e\u0301 🇨🇳 👩🏽‍💻 网络排查与数据传输'.repeat(2),
-              children: [],
-            },
-            {
-              title: '长标题 <text x="0"> & "引号"：不会成为 SVG 元素',
-              children: [],
+              title: '在线版',
+              children: ['百度脑图', '幕布', 'Coggle'].map((title) => ({
+                title,
+                children: [],
+              })),
             },
           ],
         }
-      : parameters.get('map') === 'large'
+      : parameters.get('map') === 'text'
         ? {
-            title: '长内容布局与阅读体验验证',
-            children: Array.from({ length: 6 }, (_, branch) => ({
-              title: '主题' + (branch + 1) + '：概念与应用',
-              children: Array.from({ length: 4 }, (_, point) => ({
-                title: '要点' + (point + 1) + '：解释与操作方法',
-                children: Array.from({ length: 3 }, (_, index) => ({
-                  title: '细节' + (index + 1) + '：案例、限制与注意事项',
-                  children: [],
+            title: '中英文长标题：HTTP WWW MQTT 与 OSI 七层模型'.repeat(2),
+            children: [
+              {
+                title: 'WWWWMMMMWWWWMMMMWWWWMMMMWWW',
+                children: [
+                  {
+                    title:
+                      'https://very-long-domain.example/api/v1/chat/completions?network=TCP',
+                    children: [],
+                  },
+                ],
+              },
+              {
+                title:
+                  '网络层负责贴上地址并根据路由表决定跨网络的传输路线'.repeat(
+                    3,
+                  ),
+                children: [],
+              },
+              {
+                title: '👨‍👩‍👦 e\u0301 🇨🇳 👩🏽‍💻 网络排查与数据传输'.repeat(2),
+                children: [],
+              },
+              {
+                title: '长标题 <text x="0"> & "引号"：不会成为 SVG 元素',
+                children: [],
+              },
+            ],
+          }
+        : parameters.get('map') === 'large'
+          ? {
+              title: '长内容布局与阅读体验验证',
+              children: Array.from({ length: 6 }, (_, branch) => ({
+                title: '主题' + (branch + 1) + '：概念与应用',
+                children: Array.from({ length: 4 }, (_, point) => ({
+                  title: '要点' + (point + 1) + '：解释与操作方法',
+                  children: Array.from({ length: 3 }, (_, index) => ({
+                    title: '细节' + (index + 1) + '：案例、限制与注意事项',
+                    children: [],
+                  })),
                 })),
               })),
-            })),
-          }
-        : parameters.get('map') === 'root'
-          ? { title: '只有一个中心主题', children: [] }
-          : {
-              title: '建立自己的知识体系',
-              children: [
-                {
-                  title: '明确问题',
-                  children: [
-                    { title: '从真实需求出发', children: [] },
-                    { title: '有目的地收集信息', children: [] },
-                  ],
-                },
-                {
-                  title: '提取概念',
-                  children: [
-                    { title: '用自己的话记录', children: [] },
-                    { title: '保留核心结论', children: [] },
-                  ],
-                },
-                {
-                  title: '建立连接',
-                  children: [
-                    { title: '连接已有经验', children: [] },
-                    { title: '思维导图 + Markdown', children: [] },
-                  ],
-                },
-                {
-                  title: '主动回顾',
-                  children: [
-                    { title: '在实际问题中应用', children: [] },
-                    { title: '持续调整与完善', children: [] },
-                  ],
-                },
-              ],
-            };
+            }
+          : parameters.get('map') === 'root'
+            ? { title: '只有一个中心主题', children: [] }
+            : {
+                title: '建立自己的知识体系',
+                children: [
+                  {
+                    title: '明确问题',
+                    children: [
+                      { title: '从真实需求出发', children: [] },
+                      { title: '有目的地收集信息', children: [] },
+                    ],
+                  },
+                  {
+                    title: '提取概念',
+                    children: [
+                      { title: '用自己的话记录', children: [] },
+                      { title: '保留核心结论', children: [] },
+                    ],
+                  },
+                  {
+                    title: '建立连接',
+                    children: [
+                      { title: '连接已有经验', children: [] },
+                      { title: '思维导图 + Markdown', children: [] },
+                    ],
+                  },
+                  {
+                    title: '主动回顾',
+                    children: [
+                      { title: '在实际问题中应用', children: [] },
+                      { title: '持续调整与完善', children: [] },
+                    ],
+                  },
+                ],
+              };
   const tableSummary = `## 七层职责一览
 
 | 层 | 核心职责 | 关键词 |
@@ -274,7 +305,7 @@
     runtime: {
       id: 'bilisum-fixture',
       getURL: (path) => location.origin + '/' + path,
-      getManifest: () => ({ version: '0.1.13' }),
+      getManifest: () => ({ version: '0.1.17' }),
       onInstalled: event('installed'),
       onStartup: event('startup'),
     },

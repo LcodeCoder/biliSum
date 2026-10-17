@@ -1,5 +1,6 @@
 import type { Appearance, MindMapNode } from './types';
 import { appearancePalette } from './theme';
+import { HAND_FONT_FACE, HAND_FONT_FAMILY } from './hand-font';
 
 export function validateMindMap(input: unknown): MindMapNode {
   let count = 0;
@@ -73,11 +74,14 @@ export function escapeXml(text: string): string {
 }
 
 const MAP_FONT_FAMILY =
-  'system-ui, -apple-system, Segoe UI, Microsoft YaHei, sans-serif';
-const MAP_FONT_SIZE = 13;
-const MAP_LINE_HEIGHT = 20;
-const MAP_PADDING = 14;
-const MAP_FOOTER_HEIGHT = 20;
+  "'" + HAND_FONT_FAMILY + "', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+const mapType = (depth: number) =>
+  depth === 0
+    ? { size: 20, line: 28, weight: 700, padding: 24, maxWidth: 224 }
+    : depth === 1
+      ? { size: 16, line: 24, weight: 650, padding: 12, maxWidth: 224 }
+      : { size: 13, line: 20, weight: 400, padding: 12, maxWidth: 208 };
+const TOGGLE_SPACE = 34;
 const graphemes = new Intl.Segmenter('zh', { granularity: 'grapheme' });
 let textContext: CanvasRenderingContext2D | null | undefined;
 
@@ -85,7 +89,8 @@ function titleMeasurer(depth: number): (text: string) => number {
   if (textContext === undefined && typeof document !== 'undefined')
     textContext = document.createElement('canvas').getContext('2d');
   const context = textContext;
-  const font = `${depth < 2 ? 600 : 400} ${MAP_FONT_SIZE}px ${MAP_FONT_FAMILY}`;
+  const type = mapType(depth);
+  const font = `${type.weight} ${type.size}px ${MAP_FONT_FAMILY}`;
   const cache = new Map<string, number>();
   return (text) => {
     const cached = cache.get(text);
@@ -100,7 +105,7 @@ function titleMeasurer(depth: number): (text: string) => number {
       width = Array.from(graphemes.segment(text)).reduce(
         (sum, { segment }) =>
           sum +
-          MAP_FONT_SIZE *
+          type.size *
             (/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(segment)
               ? 2
               : 1),
@@ -112,11 +117,15 @@ function titleMeasurer(depth: number): (text: string) => number {
   };
 }
 
-function wrapTitle(text: string, measure: (text: string) => number): string[] {
+function wrapTitle(
+  text: string,
+  measure: (text: string) => number,
+  maxWidth: number,
+): string[] {
   const lines: string[] = [];
   let line = '';
   for (const { segment } of graphemes.segment(text)) {
-    if (line && measure(line + segment) > 174 - MAP_PADDING * 2) {
+    if (line && measure(line + segment) > maxWidth) {
       lines.push(line);
       line = '';
     }
@@ -124,6 +133,41 @@ function wrapTitle(text: string, measure: (text: string) => number): string[] {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+function balanceRootEnding(
+  lines: string[],
+  measure: (text: string) => number,
+  maxWidth: number,
+): string[] {
+  if (lines.length < 2) return lines;
+  const previous = lines[lines.length - 2]!;
+  const last = lines[lines.length - 1]!;
+  if (measure(last) >= measure(previous) * 0.35) return lines;
+  const ending = Array.from(
+    graphemes.segment(previous + last),
+    ({ segment }) => segment,
+  );
+  let first = previous;
+  let second = last;
+  let difference = Math.abs(measure(first) - measure(second));
+  for (let split = 1; split < ending.length; split++) {
+    const left = ending.slice(0, split).join('');
+    const right = ending.slice(split).join('');
+    const leftWidth = measure(left);
+    const rightWidth = measure(right);
+    const candidate = Math.abs(leftWidth - rightWidth);
+    if (
+      leftWidth <= maxWidth &&
+      rightWidth <= maxWidth &&
+      candidate < difference
+    ) {
+      first = left;
+      second = right;
+      difference = candidate;
+    }
+  }
+  return [...lines.slice(0, -2), first, second];
 }
 
 function depthLimit(maxDepth?: number): number {
@@ -171,6 +215,8 @@ export interface MapBox {
   branch: number;
   title: string;
   hiddenCount: number;
+  side: number;
+  toggleSpace: number;
 }
 export interface MapEdge {
   from: MapBox;
@@ -242,21 +288,27 @@ export function layoutMindMap(
   tree: MindMapNode,
   options: MapLayoutOptions = {},
 ): MapLayout {
-  const mode = options.mode ?? 'compact';
+  const mode = options.mode ?? 'right';
   const maxDepth = depthLimit(options.maxDepth);
-  const gap = 12;
+  const gap = 8;
   const heights = new WeakMap<MindMapNode, number>();
   const sizes = new WeakMap<MindMapNode, number>();
   const titles = new WeakMap<MindMapNode, string[]>();
-  const measurers = [titleMeasurer(0), titleMeasurer(2)];
-  let width = 174;
+  const widths = new WeakMap<MindMapNode, number>();
+  const measurers = [titleMeasurer(0), titleMeasurer(1), titleMeasurer(2)];
   function prepare(node: MindMapNode, depth: number): number {
-    const measure = measurers[depth < 2 ? 0 : 1]!;
-    const lines = wrapTitle(node.title, measure);
+    const type = mapType(depth);
+    const measure = measurers[Math.min(2, depth)]!;
+    const wrapped = wrapTitle(node.title, measure, type.maxWidth);
+    const lines =
+      depth === 0
+        ? balanceRootEnding(wrapped, measure, type.maxWidth)
+        : wrapped;
     titles.set(node, lines);
-    // A single unsplittable grapheme must also fit inside the background.
-    for (const line of lines)
-      width = Math.max(width, Math.ceil(measure(line)) + MAP_PADDING * 2);
+    widths.set(
+      node,
+      Math.ceil(Math.max(...lines.map(measure))) + type.padding * 2,
+    );
     const count =
       1 +
       node.children.reduce((sum, child) => sum + prepare(child, depth + 1), 0);
@@ -264,7 +316,6 @@ export function layoutMindMap(
     return count;
   }
   prepare(tree, 0);
-  const step = width + 40;
   const isExpanded = (node: MindMapNode, depth: number, path: string) =>
     node.children.length > 0 &&
     (options.expandedPaths
@@ -272,13 +323,19 @@ export function layoutMindMap(
       : depth < maxDepth);
   const hiddenCount = (node: MindMapNode, depth: number, path: string) =>
     isExpanded(node, depth, path) ? 0 : (sizes.get(node) ?? 1) - 1;
-  const ownHeight = (node: MindMapNode, depth: number, path: string) =>
-    (titles.get(node)?.length ?? 1) * MAP_LINE_HEIGHT +
-    MAP_PADDING * 2 +
-    (hiddenCount(node, depth, path) ||
+  const toggleSpace = (node: MindMapNode, depth: number, path: string) =>
+    hiddenCount(node, depth, path) ||
     (options.expandedPaths && node.children.length)
-      ? MAP_FOOTER_HEIGHT
-      : 0);
+      ? TOGGLE_SPACE
+      : 0;
+  const ownWidth = (node: MindMapNode, depth: number, path: string) =>
+    Math.max(
+      depth === 0 ? 160 : 60,
+      widths.get(node)! + toggleSpace(node, depth, path),
+    );
+  const ownHeight = (node: MindMapNode, depth: number, _path: string) =>
+    (titles.get(node)?.length ?? 1) * mapType(depth).line +
+    (depth === 0 ? 36 : 16);
   const childrenAt = (node: MindMapNode, depth: number, path: string) =>
     isExpanded(node, depth, path) ? node.children : [];
   function measure(node: MindMapNode, depth: number, path: string): number {
@@ -305,6 +362,7 @@ export function layoutMindMap(
     x: number,
     y: number,
     branch: number,
+    side = 1,
   ): MapBox {
     return {
       path,
@@ -312,13 +370,15 @@ export function layoutMindMap(
       expanded: isExpanded(node, depth, path),
       x,
       y,
-      width,
+      width: ownWidth(node, depth, path),
       height: ownHeight(node, depth, path),
       lines: titles.get(node)!,
       depth,
       branch,
       title: node.title,
       hiddenCount: hiddenCount(node, depth, path),
+      side,
+      toggleSpace: toggleSpace(node, depth, path),
     };
   }
   function place(
@@ -328,14 +388,18 @@ export function layoutMindMap(
     top: number,
     branch: number,
     side: number,
+    parent: MapBox,
   ): MapBox {
     const box = boxAt(
       node,
       depth,
       path,
-      side * depth * step,
+      side > 0
+        ? parent.x + parent.width + (depth === 1 ? 80 : 44)
+        : parent.x - (depth === 1 ? 80 : 44) - ownWidth(node, depth, path),
       top + ((heights.get(node) ?? 0) - ownHeight(node, depth, path)) / 2,
       branch,
+      side,
     );
     nodes.push(box);
     let childTop = top;
@@ -347,6 +411,7 @@ export function layoutMindMap(
         childTop,
         branch,
         side,
+        box,
       );
       edges.push({ from: box, to: childBox });
       childTop += (heights.get(child) ?? 0) + gap;
@@ -384,6 +449,7 @@ export function layoutMindMap(
         top,
         branch,
         side === 0 ? 1 : -1,
+        root,
       );
       edges.push({ from: root, to: childBox });
       top += (heights.get(node) ?? 0) + gap;
@@ -411,78 +477,69 @@ export function renderMindMapLayout(
 ): string {
   const palette = appearancePalette(theme);
   const colors = palette.mapColors;
+  const paperPattern = `map-paper-${theme}`;
+  const anchorY = (box: MapBox) =>
+    box.y + (box.depth === 0 ? box.height / 2 : box.height - 12);
   const paths = layout.edges
-    .map((edge) => {
-      const direction = edge.to.x > edge.from.x ? 1 : -1;
-      const x1 = edge.from.x + (direction > 0 ? edge.from.width : 0),
-        y1 = edge.from.y + edge.from.height / 2;
-      const x2 = edge.to.x + (direction > 0 ? 0 : edge.to.width),
-        y2 = edge.to.y + edge.to.height / 2;
-      return (
-        '<path d="M' +
-        x1 +
-        ' ' +
-        y1 +
-        ' C' +
-        (x1 + direction * 20) +
-        ' ' +
-        y1 +
-        ' ' +
-        (x2 - direction * 20) +
-        ' ' +
-        y2 +
-        ' ' +
-        x2 +
-        ' ' +
-        y2 +
-        '" fill="none" stroke="' +
-        colors[edge.to.branch % colors.length] +
-        '" stroke-width="1.6" opacity="0.55"/>'
-      );
+    .map(({ from, to }) => {
+      const direction = to.side;
+      const x1 = from.x + (direction > 0 ? from.width : 0);
+      const x2 = to.x + (direction > 0 ? 0 : to.width);
+      const y1 = anchorY(from),
+        y2 = anchorY(to);
+      const bend = Math.abs(x2 - x1) * 0.5;
+      const c1 = x1 + direction * bend,
+        c2 = x2 - direction * bend;
+      const color = colors[to.branch % colors.length];
+      if (from.depth === 0) {
+        // A closed ribbon narrows smoothly into the first topic's underline.
+        return `<path class="map-branch map-trunk" d="M${x1} ${y1 - 2.8} C${c1} ${y1 - 2.8} ${c2} ${y2 - 1.2} ${x2} ${y2 - 1.2} L${x2} ${y2 + 1.2} C${c2} ${y2 + 1.2} ${c1} ${y1 + 2.8} ${x1} ${y1 + 2.8} Z" fill="${color}"/>`;
+      }
+      return `<path class="map-branch" d="M${x1} ${y1} C${c1} ${y1} ${c2} ${y2} ${x2} ${y2}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/>`;
     })
     .join('');
   const boxes = layout.nodes
     .map((box) => {
       const color = colors[box.branch % colors.length]!;
-      const fill =
-        box.depth === 0
-          ? palette.accent
-          : box.depth === 1
-            ? palette.soft
-            : palette.surface;
-      const texts = box.lines
-        .map(
-          (line, index) =>
-            '<tspan x="' +
-            (box.x + MAP_PADDING) +
-            '" y="' +
-            (box.y + MAP_PADDING + MAP_FONT_SIZE + index * MAP_LINE_HEIGHT) +
-            '">' +
-            escapeXml(line) +
-            '</tspan>',
-        )
-        .join('');
+      const type = mapType(box.depth);
+      const root = box.depth === 0;
       const toggle = options.interactive && box.childCount > 0;
       const action = box.expanded ? '收起子层' : '展开下一层';
       const hint = box.hiddenCount
         ? '+' + box.hiddenCount + ' 条未展开'
         : toggle
-          ? '− 收起 ' + box.childCount + ' 个子项'
+          ? '收起 ' + box.childCount + ' 个子项'
           : '';
+      const right = box.side > 0;
+      const labelX = root
+        ? box.x + (box.width - box.toggleSpace) / 2
+        : right
+          ? box.x + type.padding
+          : box.x + box.width - type.padding;
+      const labelY = box.y + (root ? 18 : 6) + type.size;
+      const anchor = root ? 'middle' : right ? 'start' : 'end';
+      const texts = box.lines
+        .map(
+          (line, index) =>
+            `<tspan x="${labelX}" y="${labelY + index * type.line}">${escapeXml(line)}</tspan>`,
+        )
+        .join('');
+      const baseline = anchorY(box);
+      const background = root ? palette.surface : palette.background;
+      const badgeWidth = box.hiddenCount >= 100 ? 28 : 22;
+      const badgeX = root || right ? box.x + box.width - 18 : box.x + 18;
+      const badgeY = root ? box.y + box.height / 2 : baseline;
       const folded = hint
-        ? '<text x="' +
-          (box.x + MAP_PADDING) +
-          '" y="' +
-          (box.y + box.height - MAP_PADDING) +
-          '" font-size="11" fill="' +
-          (box.depth === 0 ? palette.onAccent : palette.text) +
-          '" opacity=".8">' +
-          hint +
-          '</text>'
+        ? `<rect class="map-toggle" x="${badgeX - badgeWidth / 2}" y="${badgeY - 11}" width="${badgeWidth}" height="22" rx="3" fill="${background}" stroke="${root ? palette.text : color}" stroke-width="1.2" stroke-dasharray="3 2"/>` +
+          (box.hiddenCount
+            ? `<text class="map-toggle-label" x="${badgeX}" y="${badgeY + 3}" text-anchor="middle" font-size="10" fill="${palette.text}">+${box.hiddenCount}</text>`
+            : `<path class="map-toggle-mark" d="M${badgeX - 4} ${badgeY} H${badgeX + 4}" fill="none" stroke="${palette.text}" stroke-width="1.6" stroke-linecap="round"/>`)
         : '';
       const group = options.interactive
         ? '<g class="map-node" data-map-path="' +
           escapeXml(box.path) +
+          '" style="--map-branch-color:' +
+          color +
           '"' +
           (toggle
             ? ' role="button" tabindex="0" aria-expanded="' +
@@ -495,33 +552,21 @@ export function renderMindMapLayout(
             : '') +
           '>'
         : '<g>';
+      const shape = root
+        ? `<path class="map-root-shape" d="M${box.x + 4} ${box.y + 3} Q${box.x + box.width * 0.45} ${box.y - 1} ${box.x + box.width - 4} ${box.y + 2} L${box.x + box.width - 1} ${box.y + box.height - 4} Q${box.x + box.width * 0.55} ${box.y + box.height + 1} ${box.x + 2} ${box.y + box.height - 2} Z" fill="${palette.surface}" stroke="${palette.text}" stroke-width="1.5" stroke-dasharray="6 3"/><path class="map-root-sketch" d="M${box.x + 7} ${box.y + box.height + 2} Q${box.x + box.width * 0.55} ${box.y + box.height + 4} ${box.x + box.width + 3} ${box.y + box.height - 1} L${box.x + box.width + 4} ${box.y + 8}" fill="none" stroke="${palette.markerTeal}" stroke-width="1.6" stroke-linecap="round"/><path class="map-tape" d="M${labelX - 25} ${box.y - 4} L${labelX + 25} ${box.y - 7} L${labelX + 28} ${box.y + 5} L${labelX - 24} ${box.y + 8} Z" fill="${palette.markerYellow}" fill-opacity=".7"/>`
+        : `<path class="map-underline" d="M${box.x} ${baseline} Q${box.x + box.width * 0.28} ${baseline + 1.5} ${box.x + box.width * 0.5} ${baseline} T${box.x + box.width} ${baseline}" fill="none" stroke="${color}" stroke-width="${box.depth === 1 ? 2.4 : 1.8}" stroke-linecap="round"/>`;
       return (
         group +
         '<title>' +
-        escapeXml(box.title + (toggle ? '（点击' + action + '）' : '')) +
-        '</title><rect x="' +
-        box.x +
-        '" y="' +
-        box.y +
-        '" width="' +
-        box.width +
-        '" height="' +
-        box.height +
-        '" rx="6" fill="' +
-        fill +
-        '" stroke="' +
-        (box.depth === 0 ? palette.accent : color) +
-        '" stroke-opacity="' +
-        (box.depth < 2 ? '1' : '.25') +
-        '"/><text font-size="' +
-        MAP_FONT_SIZE +
-        '" font-weight="' +
-        (box.depth < 2 ? '600' : '400') +
-        '" fill="' +
-        (box.depth === 0 ? palette.onAccent : palette.text) +
-        '">' +
-        texts +
-        '</text>' +
+        escapeXml(
+          box.title +
+            (hint ? '（' + hint + '）' : '') +
+            (toggle ? '（点击' + action + '）' : ''),
+        ) +
+        '</title>' +
+        `<rect class="map-hit-area" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="3" fill="transparent"/>` +
+        shape +
+        `<text class="map-label" font-size="${type.size}" font-weight="${type.weight}" text-anchor="${anchor}" fill="${palette.text}">${texts}</text>` +
         folded +
         '</g>'
       );
@@ -544,9 +589,17 @@ export function renderMindMapLayout(
     MAP_FONT_FAMILY +
     '" letter-spacing="0"><title>' +
     escapeXml(title) +
-    '</title><rect width="100%" height="100%" fill="' +
-    palette.background +
-    '"/>' +
+    '</title>' +
+    (options.interactive
+      ? ''
+      : '<defs><style><![CDATA[' +
+        HAND_FONT_FACE +
+        `]]></style><pattern id="${paperPattern}" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M0 27.5 H28" stroke="${palette.line}" stroke-opacity=".2" stroke-width=".6"/></pattern></defs>`) +
+    (options.interactive
+      ? ''
+      : '<rect width="100%" height="100%" fill="' +
+        palette.background +
+        `"/><rect width="100%" height="100%" fill="url(#${paperPattern})"/>`) +
     paths +
     boxes +
     '</svg>'

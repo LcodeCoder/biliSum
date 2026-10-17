@@ -30,6 +30,30 @@ export function fitMap(
   };
 }
 
+/** Start at reading size, keeping the root visible while branches continue right. */
+export function readableMap(
+  content: { width: number; height: number },
+  root: { x: number; y: number; width: number; height: number },
+  viewport: { width: number; height: number },
+  margin = 20,
+): MapCamera {
+  const fitted = fitMap(content, viewport, margin);
+  if (fitted.scale >= 0.88) return fitted;
+  // An unusually long root must still fit inside a narrow side panel.
+  const scale = clampMapScale(
+    Math.min(
+      Math.max(0.88, fitted.scale),
+      Math.max(1, viewport.width - margin * 2) / root.width,
+      Math.max(1, viewport.height - margin * 2) / root.height,
+    ),
+  );
+  return {
+    x: margin - root.x * scale,
+    y: viewport.height / 2 - (root.y + root.height / 2) * scale,
+    scale,
+  };
+}
+
 export function zoomMap(
   camera: MapCamera,
   factor: number,

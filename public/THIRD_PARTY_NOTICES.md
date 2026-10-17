@@ -92,3 +92,19 @@ All speech executable JavaScript and WebAssembly are packaged locally. Only mode
 
 - Bits UI 2.19.5 provides the Svelte resource tabs and their keyboard/focus behavior. It is distributed under MIT, copyright (c) 2023 Hunter Johnston. The full license is included in `licenses/Bits-UI-MIT.txt`.
 - @internationalized/date 3.10.1 is the fixed peer dependency used with Bits UI. It is distributed under Apache-2.0. The full license is included in `licenses/Internationalized-Date-Apache-2.0.txt`.
+
+## Locally packaged handwriting font
+
+BiliSum Hand is a renamed, web-optimized subset of LXGW WenKai Lite Regular
+1.522, copyright 2021–2026 LXGW and copyright 2020 The Klee Project Authors.
+The original font is distributed under the SIL Open Font License 1.1.
+The complete license is included in `licenses/LXGW-WenKai-Lite-OFL-1.1.txt`.
+
+The subset retains GB2312 characters, Latin and common punctuation, plus
+characters used by the biliSum interface. Rare characters outside that set
+use the configured system-font fallback. Font data is packaged locally;
+loading the interface and exported HTML/SVG does not contact a font service.
+Exported documents embed the same subset and its OFL notice. Upstream source
+and reproduction details are recorded in `fonts/README.md`.
+
+Upstream: https://github.com/lxgw/LxgwWenKai-Lite/tree/v1.522

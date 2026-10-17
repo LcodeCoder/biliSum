@@ -202,20 +202,20 @@
         disabled={!!busy}
         aria-label="测试 API 连接"
         title="测试 API 连接（发送一次简短请求）"
-        ><Icon
-          name={busy === 'test' ? 'loader' : 'plug'}
-          size={16}
-        />测试连接</button
+        ><Icon name={busy === 'test' ? 'loader' : 'plug'} size={16} />{busy ===
+        'test'
+          ? '正在测试…'
+          : '测试连接'}</button
       ><button
         type="submit"
         class="text-button primary-button"
         disabled={!!busy}
         aria-label="保存 API 设置"
         title="保存 API 设置"
-        ><Icon
-          name={busy === 'save' ? 'loader' : 'save'}
-          size={16}
-        />保存设置</button
+        ><Icon name={busy === 'save' ? 'loader' : 'save'} size={16} />{busy ===
+        'save'
+          ? '正在保存…'
+          : '保存设置'}</button
       >
     </div>
   </form>

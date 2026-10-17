@@ -162,10 +162,14 @@
       </select>
     </div>
   {/if}
-  <div class="language-row">
+  <div class="language-row subtitle-display-row">
     <button
-      class="text-button"
+      class="text-button subtitle-display"
+      class:active={displaying && !!transcript?.timed}
       aria-pressed={displaying && !!transcript?.timed}
+      aria-describedby={transcript && !transcript.timed
+        ? 'subtitle-display-hint'
+        : undefined}
       disabled={!transcript?.timed || loading || !hasVideo}
       onclick={ontoggledisplay}
       ><Icon name="subtitles" size={17} />{displaying && transcript?.timed
@@ -173,7 +177,8 @@
         : '在视频中显示'}</button
     >
     {#if transcript && !transcript.timed}<small
-        >纯文本字幕没有时间轴，无法同步显示</small
+        class="subtitle-display-hint"
+        id="subtitle-display-hint">纯文本字幕没有时间轴，无法同步显示</small
       >{/if}
   </div>
   <div class="search-field control-field compact-control">

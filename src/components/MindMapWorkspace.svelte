@@ -4,7 +4,6 @@
   import MindMapOutline from './MindMapOutline.svelte';
   import MindMapOverview from './MindMapOverview.svelte';
   import type { Appearance, MindMapNode } from '../lib/types';
-  import type { MapLayoutMode } from '../lib/mindmap';
 
   let {
     tree,
@@ -18,16 +17,10 @@
   let view = $state<'map' | 'outline' | 'overview'>('map');
   let branch = $state('all');
   let depth = $state(1);
-  let mode = $state<'auto' | MapLayoutMode>('auto');
-  let workspace = $state<HTMLDivElement>();
-  let width = $state(320);
   const selected = $derived(
     branch === 'all' ? null : (tree.children[Number(branch)] ?? null),
   );
   const shownTree = $derived(selected ?? tree);
-  const layoutMode = $derived(
-    mode === 'auto' ? (width >= 620 ? 'compact' : 'right') : mode,
-  );
 
   function focusBranch(index: number) {
     branch = String(index);
@@ -38,16 +31,9 @@
     branch = value;
     depth = value === 'all' ? 1 : 2;
   }
-  $effect(() => {
-    const element = workspace;
-    if (!element) return;
-    const observer = new ResizeObserver(() => (width = element.clientWidth));
-    observer.observe(element);
-    return () => observer.disconnect();
-  });
 </script>
 
-<div class="mindmap-workspace" bind:this={workspace}>
+<div class="mindmap-workspace">
   <div class="analysis-view-tabs" role="group" aria-label="分析展示方式">
     <button
       class:active={view === 'map'}
@@ -101,18 +87,6 @@
           <option value={6}>全部层级</option>
         </select>
       </label>
-      <label class="layout-select"
-        ><span class="visually-hidden">导图布局</span>
-        <select
-          class="form-control compact-control"
-          aria-label="导图布局"
-          bind:value={mode}
-        >
-          <option value="auto">自动布局</option>
-          <option value="compact">双向紧凑</option>
-          <option value="right">向右展开</option>
-        </select>
-      </label>
     {:else if view === 'outline'}
       <button
         class="icon-button small"
@@ -128,7 +102,7 @@
   <div class="analysis-view-content" class:diagram-content={view === 'map'}>
     <!-- Keep the camera, search and folding state when switching display modes. -->
     <div class="diagram-view" hidden={view !== 'map'}>
-      <MindMap tree={shownTree} {theme} mode={layoutMode} maxDepth={depth} />
+      <MindMap tree={shownTree} {theme} mode="right" maxDepth={depth} />
     </div>
     <div class="analysis-scroll" hidden={view !== 'outline'}>
       {#key shownTree}<MindMapOutline tree={shownTree} />{/key}
