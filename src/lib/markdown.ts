@@ -1,14 +1,15 @@
-import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { SummaryResult, VideoInfo } from './types';
 import { detailProfile } from './detail';
+import { markdownWithMath, restoreMath } from './math';
 
-export function renderMarkdown(markdown: string): string {
-  const html = marked.parse(markdown, {
-    gfm: true,
-    breaks: false,
-    async: false,
-  });
+// A reading-page export has a second document sanitizer. Keep math as opaque
+// text until that pass finishes, rather than relaxing either HTML allowlist.
+export function prepareMarkdown(markdown: string): {
+  html: string;
+  restoreMath(root: HTMLElement): void;
+} {
+  const { html, expressions } = markdownWithMath(markdown);
   const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       'p',
@@ -95,6 +96,16 @@ export function renderMarkdown(markdown: string): string {
     table.before(wrapper);
     wrapper.append(table);
   });
+  return {
+    html: document.body.innerHTML,
+    restoreMath: (root) => restoreMath(root, expressions),
+  };
+}
+
+export function renderMarkdown(markdown: string): string {
+  const prepared = prepareMarkdown(markdown);
+  const document = new DOMParser().parseFromString(prepared.html, 'text/html');
+  prepared.restoreMath(document.body);
   return document.body.innerHTML;
 }
 

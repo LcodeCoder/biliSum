@@ -108,3 +108,15 @@ Exported documents embed the same subset and its OFL notice. Upstream source
 and reproduction details are recorded in `fonts/README.md`.
 
 Upstream: https://github.com/lxgw/LxgwWenKai-Lite/tree/v1.522
+
+## Locally rendered mathematics
+
+KaTeX 0.19.0, copyright (c) 2013–2020 Khan Academy and other contributors,
+is distributed under the MIT license. Its renderer, stylesheet and WOFF2
+mathematical fonts are bundled locally. The full license is included in
+`licenses/KaTeX-MIT.txt` and retained in embedded export styles.
+`node scripts/vendor-math.mjs` regenerates the embedded styles and fonts
+from the exact npm dependency. Formula rendering and exported HTML do not
+contact a CDN or font service.
+
+Upstream: https://github.com/KaTeX/KaTeX/tree/v0.19.0

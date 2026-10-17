@@ -79,8 +79,8 @@ const mapType = (depth: number) =>
   depth === 0
     ? { size: 20, line: 28, weight: 700, padding: 24, maxWidth: 224 }
     : depth === 1
-      ? { size: 16, line: 24, weight: 650, padding: 12, maxWidth: 224 }
-      : { size: 13, line: 20, weight: 400, padding: 12, maxWidth: 208 };
+      ? { size: 16, line: 24, weight: 650, padding: 12, maxWidth: 340 }
+      : { size: 15, line: 24, weight: 400, padding: 12, maxWidth: 420 };
 const TOGGLE_SPACE = 34;
 const graphemes = new Intl.Segmenter('zh', { granularity: 'grapheme' });
 let textContext: CanvasRenderingContext2D | null | undefined;
@@ -292,6 +292,7 @@ export function layoutMindMap(
   const maxDepth = depthLimit(options.maxDepth);
   const gap = 8;
   const heights = new WeakMap<MindMapNode, number>();
+  const branchGaps = new WeakMap<MindMapNode, number>();
   const sizes = new WeakMap<MindMapNode, number>();
   const titles = new WeakMap<MindMapNode, string[]>();
   const widths = new WeakMap<MindMapNode, number>();
@@ -340,16 +341,29 @@ export function layoutMindMap(
     isExpanded(node, depth, path) ? node.children : [];
   function measure(node: MindMapNode, depth: number, path: string): number {
     const children = childrenAt(node, depth, path);
+    const childHeights = children.map((child, index) =>
+      measure(child, depth + 1, `${path}.${index}`),
+    );
+    const own = ownHeight(node, depth, path);
     const height = Math.max(
-      ownHeight(node, depth, path),
-      children.reduce(
-        (sum, child, index) =>
-          sum + measure(child, depth + 1, `${path}.${index}`),
-        0,
-      ) +
+      own,
+      childHeights.reduce((sum, childHeight) => sum + childHeight, 0) +
         Math.max(0, children.length - 1) * gap,
     );
     heights.set(node, height);
+    const parentAnchor = height / 2 + (depth === 0 ? 0 : own / 2 - 12);
+    let childTop = 0;
+    let reach = 0;
+    children.forEach((child, index) => {
+      const childOwn = ownHeight(child, depth + 1, `${path}.${index}`);
+      const childAnchor =
+        childTop + childHeights[index]! / 2 + childOwn / 2 - 12;
+      reach = Math.max(reach, Math.abs(childAnchor - parentAnchor));
+      childTop += childHeights[index]! + gap;
+    });
+    // Taller visible fans spread gradually while keeping nearby topics within
+    // reach. Siblings share a column, and extra height has diminishing impact.
+    branchGaps.set(node, 100 + 240 * Math.tanh(reach / 450));
     return height;
   }
   measure(tree, 0, '0');
@@ -389,14 +403,15 @@ export function layoutMindMap(
     branch: number,
     side: number,
     parent: MapBox,
+    horizontalGap: number,
   ): MapBox {
     const box = boxAt(
       node,
       depth,
       path,
       side > 0
-        ? parent.x + parent.width + (depth === 1 ? 80 : 44)
-        : parent.x - (depth === 1 ? 80 : 44) - ownWidth(node, depth, path),
+        ? parent.x + parent.width + horizontalGap
+        : parent.x - horizontalGap - ownWidth(node, depth, path),
       top + ((heights.get(node) ?? 0) - ownHeight(node, depth, path)) / 2,
       branch,
       side,
@@ -412,6 +427,7 @@ export function layoutMindMap(
         branch,
         side,
         box,
+        branchGaps.get(node)!,
       );
       edges.push({ from: box, to: childBox });
       childTop += (heights.get(child) ?? 0) + gap;
@@ -429,6 +445,21 @@ export function layoutMindMap(
     groupHeights[side]! += heights.get(node) ?? 0;
   });
   const contentHeight = Math.max(ownHeight(tree, 0, '0'), ...groupHeights);
+  let rootReach = 0;
+  groups.forEach((group, side) => {
+    let top = (contentHeight - groupHeights[side]!) / 2;
+    for (const { node, branch } of group) {
+      const childOwn = ownHeight(node, 1, `0.${branch}`);
+      const childHeight = heights.get(node)!;
+      const childAnchor = top + childHeight / 2 + childOwn / 2 - 12;
+      rootReach = Math.max(
+        rootReach,
+        Math.abs(childAnchor - contentHeight / 2),
+      );
+      top += childHeight + gap;
+    }
+  });
+  branchGaps.set(tree, 140 + 300 * Math.tanh(rootReach / 600));
   // Place the root independently: only its direct branches are split left/right.
   const root = boxAt(
     tree,
@@ -450,6 +481,7 @@ export function layoutMindMap(
         branch,
         side === 0 ? 1 : -1,
         root,
+        branchGaps.get(tree)!,
       );
       edges.push({ from: root, to: childBox });
       top += (heights.get(node) ?? 0) + gap;
@@ -487,7 +519,9 @@ export function renderMindMapLayout(
       const x2 = to.x + (direction > 0 ? 0 : to.width);
       const y1 = anchorY(from),
         y2 = anchorY(to);
-      const bend = Math.abs(x2 - x1) * 0.5;
+      const run = Math.abs(x2 - x1);
+      const rise = Math.abs(y2 - y1);
+      const bend = run * (0.5 - (0.18 * rise) / (run + rise));
       const c1 = x1 + direction * bend,
         c2 = x2 - direction * bend;
       const color = colors[to.branch % colors.length];
@@ -516,7 +550,7 @@ export function renderMindMapLayout(
         : right
           ? box.x + type.padding
           : box.x + box.width - type.padding;
-      const labelY = box.y + (root ? 18 : 6) + type.size;
+      const labelY = box.y + (root ? 18 : 7) + type.size;
       const anchor = root ? 'middle' : right ? 'start' : 'end';
       const texts = box.lines
         .map(

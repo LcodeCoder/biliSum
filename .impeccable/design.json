@@ -84,7 +84,7 @@
       },
       "map-detail": {
         "displayName": "导图细节",
-        "purpose": "下级可读文本。"
+        "purpose": "下级可读文本，扩大文字区并保留连续短语。"
       }
     },
     "shadows": [
@@ -121,6 +121,11 @@
         "purpose": "轻微姿态变化。"
       },
       {
+        "name": "map-reposition",
+        "value": "220ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+        "purpose": "展开与聚焦只平移，不缩小文字；直接拖动和滚轮跟随输入。"
+      },
+      {
         "name": "reduced-motion",
         "value": "animation:none;transition:none;scroll-behavior:auto",
         "purpose": "遵循系统动态偏好。"
@@ -146,9 +151,16 @@
     ],
     "mindMap": {
       "direction": "right",
-      "firstLevelGap": "80px",
-      "descendantGap": "44px",
-      "initialReadableScale": 0.88,
+      "firstLevelGap": "140px",
+      "descendantGap": "100px",
+      "firstLevelGapLimit": "440px",
+      "descendantGapLimit": "340px",
+      "gapBehavior": "随可见分支高度温和增加，逐渐接近上限；同级节点保持对齐。",
+      "topicTextMaxWidth": "340px",
+      "detailTextMaxWidth": "420px",
+      "initialReadableScale": 1,
+      "initialScaleConstraint": "仅当中心主题本身无法放入视口时缩至可容纳它的比例。",
+      "expansionCamera": "保留当前缩放和父节点位置；需要时平移显示内容。",
       "exports": "完整树、相同字体与主题色"
     },
     "font": {
@@ -156,7 +168,16 @@
       "source": "Renamed LXGW WenKai Lite subset",
       "license": "SIL Open Font License 1.1",
       "synthesis": "weight",
-      "offline": "Embedded data font in HTML and SVG"
+      "offline": "Embedded data font in HTML and SVG",
+      "mathException": "公式使用 KaTeX 专用数学字体，保留准确的数学比例。"
+    },
+    "math": {
+      "renderer": "KaTeX",
+      "inlineDelimiters": ["$...$", "\\(...\\)"],
+      "displayDelimiters": ["$$...$$", "\\[...\\]"],
+      "legacyCache": "识别旧缓存中包含明确 TeX 命令或代数表达式的括号式公式；普通说明、金额与代码保留原文。",
+      "layout": "行内公式与正文基线衔接；独立公式留出上下间距，宽公式局部横向滚动。",
+      "offline": "公式样式与 WOFF2 字体在扩展和单文件 HTML 中内嵌，无远程资源。"
     }
   },
   "components": [
@@ -201,9 +222,9 @@
     },
     {
       "name": "向右导图",
-      "kind": "figure",
-      "description": "纸片中心、彩色曲线、普通文字下划线。",
-      "html": "<div class=\"ds-canvas\"><svg viewBox=\"0 0 560 160\" role=\"img\" aria-label=\"向右展开的思维导图示意\"><path d=\"M12 48Q92 44 171 48L173 110Q93 113 13 109Z\" fill=\"var(--surface,#fffef5)\" stroke=\"var(--text,#2c2c2c)\" stroke-width=\"1.5\" stroke-dasharray=\"6 3\"/><path d=\"M173 79C208 79 215 40 253 40H344M173 79C208 79 215 120 253 120H344M344 40C363 40 370 38 388 38H490\" fill=\"none\" stroke=\"var(--marker-teal,#4ecdc4)\" stroke-width=\"2\" stroke-linecap=\"round\"/><text x=\"38\" y=\"87\" fill=\"var(--text,#2c2c2c)\" font-size=\"20\" font-weight=\"700\">视频主题</text><text x=\"265\" y=\"33\" fill=\"var(--text,#2c2c2c)\" font-size=\"16\">核心观点</text><text x=\"265\" y=\"113\" fill=\"var(--text,#2c2c2c)\" font-size=\"16\">应用示例</text><text x=\"400\" y=\"32\" fill=\"var(--text,#2c2c2c)\" font-size=\"13\">关键细节</text></svg></div>",
+      "kind": "custom",
+      "description": "实际渲染器中的向右布局：纸片中心、随高度拉宽的彩色曲线和普通文字下划线。",
+      "html": "<div class=\"ds-canvas\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"635.9848468702903\" height=\"136\" viewBox=\"0 0 635.9848468702903 136\" role=\"img\" aria-label=\"视频主题\" font-family=\"'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif\" letter-spacing=\"0\"><title>视频主题</title><defs><pattern id=\"ds-map-paper-light\" width=\"28\" height=\"28\" patternUnits=\"userSpaceOnUse\"><path d=\"M0 27.5 H28\" stroke=\"#aaa99a\" stroke-opacity=\".2\" stroke-width=\".6\"/></pattern></defs><rect width=\"100%\" height=\"100%\" fill=\"#fffef5\"/><rect width=\"100%\" height=\"100%\" fill=\"url(#ds-map-paper-light)\"/><path class=\"ds-map-branch\" d=\"M427.98484687029037 52 C477.9848468702903 52 477.9848468702903 52 527.9848468702903 52\" fill=\"none\" stroke=\"#ed6865\" stroke-width=\"1.8\" stroke-linecap=\"round\"/><path class=\"ds-map-branch ds-map-trunk\" d=\"M184 65.2 C259.3803540164641 65.2 264.6044928538263 50.8 339.98484687029037 50.8 L339.98484687029037 53.2 C264.6044928538263 53.2 259.3803540164641 70.8 184 70.8 Z\" fill=\"#ed6865\"/><path class=\"ds-map-branch ds-map-trunk\" d=\"M184 65.2 C257.21292799744737 65.2 266.771918872843 98.8 339.98484687029037 98.8 L339.98484687029037 101.2 C266.771918872843 101.2 257.21292799744737 70.8 184 70.8 Z\" fill=\"#32aaa3\"/><g><title>视频主题</title><rect class=\"ds-map-hit-area\" x=\"24\" y=\"36\" width=\"160\" height=\"64\" rx=\"3\" fill=\"transparent\"/><path class=\"ds-map-root-shape\" d=\"M28 39 Q96 35 180 38 L183 96 Q112 101 26 98 Z\" fill=\"#fffef5\" stroke=\"#2c2c2c\" stroke-width=\"1.5\" stroke-dasharray=\"6 3\"/><path class=\"ds-map-root-sketch\" d=\"M31 102 Q112 104 187 99 L188 44\" fill=\"none\" stroke=\"#4ecdc4\" stroke-width=\"1.6\" stroke-linecap=\"round\"/><path class=\"ds-map-tape\" d=\"M79 32 L129 29 L132 41 L80 44 Z\" fill=\"#ffd93d\" fill-opacity=\".7\"/><text class=\"ds-map-label\" font-size=\"20\" font-weight=\"700\" text-anchor=\"middle\" fill=\"#2c2c2c\"><tspan x=\"104\" y=\"74\">视频主题</tspan></text></g><g><title>核心观点</title><rect class=\"ds-map-hit-area\" x=\"339.98484687029037\" y=\"24\" width=\"88\" height=\"40\" rx=\"3\" fill=\"transparent\"/><path class=\"ds-map-underline\" d=\"M339.98484687029037 52 Q364.62484687029036 53.5 383.98484687029037 52 T427.98484687029037 52\" fill=\"none\" stroke=\"#ed6865\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><text class=\"ds-map-label\" font-size=\"16\" font-weight=\"650\" text-anchor=\"start\" fill=\"#2c2c2c\"><tspan x=\"351.98484687029037\" y=\"46\">核心观点</tspan></text></g><g><title>关键细节</title><rect class=\"ds-map-hit-area\" x=\"527.9848468702903\" y=\"24\" width=\"84\" height=\"40\" rx=\"3\" fill=\"transparent\"/><path class=\"ds-map-underline\" d=\"M527.9848468702903 52 Q551.5048468702903 53.5 569.9848468702903 52 T611.9848468702903 52\" fill=\"none\" stroke=\"#ed6865\" stroke-width=\"1.8\" stroke-linecap=\"round\"/><text class=\"ds-map-label\" font-size=\"15\" font-weight=\"400\" text-anchor=\"start\" fill=\"#2c2c2c\"><tspan x=\"539.9848468702903\" y=\"45\">关键细节</tspan></text></g><g><title>应用示例</title><rect class=\"ds-map-hit-area\" x=\"339.98484687029037\" y=\"72\" width=\"88\" height=\"40\" rx=\"3\" fill=\"transparent\"/><path class=\"ds-map-underline\" d=\"M339.98484687029037 100 Q364.62484687029036 101.5 383.98484687029037 100 T427.98484687029037 100\" fill=\"none\" stroke=\"#32aaa3\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><text class=\"ds-map-label\" font-size=\"16\" font-weight=\"650\" text-anchor=\"start\" fill=\"#2c2c2c\"><tspan x=\"351.98484687029037\" y=\"94\">应用示例</tspan></text></g></svg></div>",
       "css": ".ds-canvas{padding:20px;background:var(--bg,#fffef5);color:var(--text,#2c2c2c);font-family:'BiliSum Hand', 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:14px;line-height:1.85;font-synthesis:weight}.ds-canvas svg{display:block;max-width:100%;height:auto;font-family:inherit}"
     }
   ],
@@ -213,8 +234,9 @@
     "keyCharacteristics": [
       "BiliSum Hand正文与标题，14px／1.85阅读节奏。",
       "细虚线、小幅不规则圆角、无模糊硬偏移影。",
-      "导图只向右，首级80px、后续44px。",
-      "浅色、护眼、深色以及离线导出共享色板与字体。"
+      "导图只向右，基础间距首级140px、后续100px，随可见高度温和拉宽。",
+      "浅色、护眼、深色以及离线导出共享色板与字体。",
+      "导图默认1倍阅读，展开只平移；数学公式使用内嵌KaTeX字体。"
     ],
     "rules": [
       {
@@ -224,8 +246,13 @@
       },
       {
         "name": "可读导图",
-        "body": "普通节点只保留文字和彩色下划线；初始可读比例允许右侧继续拖动。",
+        "body": "普通节点只保留文字和彩色下划线；默认1倍阅读，展开与聚焦保持当前缩放，需要时平移。",
         "section": "layout"
+      },
+      {
+        "name": "数学字形",
+        "body": "公式使用 KaTeX 专用字体，作为手写字体规则的例外；样式与字体内嵌，宽公式局部横向滚动。",
+        "section": "typography"
       }
     ],
     "dos": [
@@ -234,7 +261,7 @@
       "胶带与旋转只用于少量纸片或当前选项。"
     ],
     "donts": [
-      "不使用渐变、等宽字体、模糊软影和嵌套纸片。",
+      "不使用渐变、正文等宽字体、模糊软影和嵌套纸片；公式保留KaTeX专用字体。",
       "不把每个子节点做成卡片或改成双向导图。"
     ]
   }

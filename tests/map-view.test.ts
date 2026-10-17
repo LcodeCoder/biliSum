@@ -38,23 +38,26 @@ test('initial narrow maps keep reading size and the root at the left margin', ()
       camera.y + (root.y + root.height / 2) * camera.scale,
       viewport.height / 2,
     );
-    assert.ok(camera.scale >= 0.88 && camera.scale <= 1);
+    close(camera.scale, 1);
     assert.ok(camera.x + (root.x + root.width) * camera.scale <= width - 20);
     if (width < content.width)
       assert.ok(camera.scale > fitMap(content, viewport).scale);
   }
 });
 
-test('readable maps use the complete centered overview when it remains legible', () => {
+test('readable maps center the whole diagram only when it fits at original size', () => {
   const content = { width: 660, height: 420 };
   const root = { x: 24, y: 178, width: 190, height: 64 };
-  for (const width of [630, 900]) {
+  for (const width of [700, 900]) {
     const viewport = { width, height: 520 };
     assert.deepEqual(
       readableMap(content, root, viewport),
       fitMap(content, viewport, 20),
     );
   }
+  const camera = readableMap(content, root, { width: 630, height: 520 });
+  close(camera.scale, 1);
+  close(camera.x + root.x, 20);
 });
 
 test('initial reading view fits an unusually long root without changing full overview', () => {
@@ -101,25 +104,27 @@ test('drag pans in screen pixels independently of zoom', () => {
   assert.deepEqual(camera, { x: -100, y: -400, scale: 2 });
 });
 
-test('revealing children on either side keeps their group in view at a readable scale', () => {
+test('revealing nodes pans at the chosen scale and shows the start of oversized regions', () => {
   const viewport = { width: 320, height: 260 };
   const camera = { x: -50, y: -300, scale: 1 };
   for (const region of [
-    { x: 300, y: 200, width: 388, height: 180 },
+    { x: 300, y: 200, width: 240, height: 180 },
     { x: -500, y: 700, width: 388, height: 400 },
   ]) {
     const next = revealMapRegion(camera, region, viewport);
-    assert.ok(next.scale <= camera.scale);
+    close(next.scale, camera.scale);
     assert.ok(next.x + region.x * next.scale >= 16 - 1e-8);
     assert.ok(next.y + region.y * next.scale >= 16 - 1e-8);
-    assert.ok(
-      next.x + (region.x + region.width) * next.scale <=
-        viewport.width - 16 + 1e-8,
-    );
-    assert.ok(
-      next.y + (region.y + region.height) * next.scale <=
-        viewport.height - 16 + 1e-8,
-    );
+    if (region.width <= viewport.width - 32)
+      assert.ok(
+        next.x + (region.x + region.width) <= viewport.width - 16 + 1e-8,
+      );
+    else close(next.x + region.x, 16);
+    if (region.height <= viewport.height - 32)
+      assert.ok(
+        next.y + (region.y + region.height) <= viewport.height - 16 + 1e-8,
+      );
+    else close(next.y + region.y, 16);
   }
   assert.deepEqual(camera, { x: -50, y: -300, scale: 1 });
 });

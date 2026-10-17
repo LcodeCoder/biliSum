@@ -1,0 +1,41 @@
+/* Formula glyphs keep their mathematical proportions within handwritten prose. */
+.bilisum-math {
+  color: inherit;
+  overflow-wrap: normal;
+  text-indent: 0;
+  text-decoration: none;
+}
+.bilisum-math .katex {
+  font-size: 1.08em;
+  line-height: 1.2;
+  text-rendering: auto;
+}
+.bilisum-math-inline {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: -0.18em;
+  padding-block: 0.2em;
+  margin-block: -0.2em;
+  overscroll-behavior-inline: contain;
+}
+.bilisum-math-display {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-block: 1em;
+  padding: 0.35em 0.2em;
+  overscroll-behavior-inline: contain;
+}
+.bilisum-math-display > .katex-display {
+  margin: 0;
+  width: max-content;
+  min-width: 100%;
+}
+.bilisum-math:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}

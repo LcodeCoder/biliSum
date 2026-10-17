@@ -1,12 +1,13 @@
 import DOMPurify from 'dompurify';
 import { renderDoc } from '../vendor/answer-me-with-html/renderer.js';
-import { renderMarkdown } from './markdown';
+import { prepareMarkdown } from './markdown';
 import { validateHtmlDocument } from './html-document';
 import { detailProfile } from './detail';
 import { formatTime } from './transcript';
 import type { Appearance, HtmlResult, MindMapNode, VideoInfo } from './types';
 import { reportThemeVariables } from './theme';
 import { HAND_FONT_FACE, HAND_FONT_FAMILY } from './hand-font';
+import { MATH_FONT_CSS, MATH_LAYOUT_CSS } from './math-style-data';
 
 export type HtmlReportLayout = 'sheet' | 'doc';
 export type HtmlReportTheme = 'shadcn' | 'paper' | 'blueprint';
@@ -55,11 +56,9 @@ function dateLabel(value: string): string {
     : '未记录';
 }
 
-function sectionMarkup(markdown: string): string {
-  const doc = new DOMParser().parseFromString(
-    renderMarkdown(markdown),
-    'text/html',
-  );
+function sectionMarkup(markdown: string): ReturnType<typeof prepareMarkdown> {
+  const prepared = prepareMarkdown(markdown);
+  const doc = new DOMParser().parseFromString(prepared.html, 'text/html');
   doc.querySelectorAll('.markdown-table-scroll').forEach((node) => {
     node.className = 'am-table-wrap';
   });
@@ -68,7 +67,7 @@ function sectionMarkup(markdown: string): string {
     node.className = 'am-code';
     node.setAttribute('tabindex', '0');
   });
-  return doc.body.innerHTML;
+  return { ...prepared, html: doc.body.innerHTML };
 }
 function treeLines(node: MindMapNode, depth = 0): string[] {
   return [
@@ -95,6 +94,9 @@ export function createHtmlReport(input: HtmlReportInput): string {
   const content = validateHtmlDocument(result.document);
   const tree = content.tree;
   const slots = new Map<string, { panelId: string; html: string }>();
+  const restoreFormulas: Array<
+    ReturnType<typeof prepareMarkdown>['restoreMath']
+  > = [];
   const panels: string[] = [];
   const add = (title: string, body: string) => {
     const key = String.fromCharCode(65 + panels.length);
@@ -108,7 +110,9 @@ export function createHtmlReport(input: HtmlReportInput): string {
   content.sections.forEach((section, index) => {
     const token = 'BILISUM_HTML_SUMMARY_SLOT_' + index;
     const panelId = add(section.title, token);
-    slots.set(token, { panelId, html: sectionMarkup(section.markdown) });
+    const sectionContent = sectionMarkup(section.markdown);
+    slots.set(token, { panelId, html: sectionContent.html });
+    restoreFormulas.push(sectionContent.restoreMath);
   });
   if (tree) {
     add('主题结构', '```tree list\n' + treeLines(tree).join('\n') + '\n```');
@@ -257,6 +261,8 @@ export function createHtmlReport(input: HtmlReportInput): string {
     ],
     FORBID_ATTR: ['src', 'srcset', 'poster', 'background', 'ping', 'srcdoc'],
   });
+  // Only KaTeX-generated nodes enter after both untrusted-HTML sanitizers.
+  restoreFormulas.forEach((restore) => restore(doc.body));
   for (const link of doc.body.querySelectorAll('a')) {
     const href = link.getAttribute('href') || '';
     if (href.startsWith('#panel-')) continue;
@@ -286,6 +292,8 @@ export function createHtmlReport(input: HtmlReportInput): string {
   const readingStyles = doc.createElement('style');
   readingStyles.textContent = `
     ${HAND_FONT_FACE}
+    ${MATH_FONT_CSS}
+    ${MATH_LAYOUT_CSS}
     html[data-appearance] { --font-hand: ${HAND_FONT_FAMILY}; }
     html[data-appearance] body {
       font-family: var(--font-sans);

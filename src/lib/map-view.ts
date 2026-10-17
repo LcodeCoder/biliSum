@@ -38,11 +38,11 @@ export function readableMap(
   margin = 20,
 ): MapCamera {
   const fitted = fitMap(content, viewport, margin);
-  if (fitted.scale >= 0.88) return fitted;
+  if (fitted.scale === 1) return fitted;
   // An unusually long root must still fit inside a narrow side panel.
   const scale = clampMapScale(
     Math.min(
-      Math.max(0.88, fitted.scale),
+      1,
       Math.max(1, viewport.width - margin * 2) / root.width,
       Math.max(1, viewport.height - margin * 2) / root.height,
     ),
@@ -72,7 +72,7 @@ export function panMap(camera: MapCamera, dx: number, dy: number): MapCamera {
   return { ...camera, x: camera.x + dx, y: camera.y + dy };
 }
 
-/** Bring a newly revealed parent/child group into view without zooming in. */
+/** Reveal by panning; opening or focusing nodes never changes the text size. */
 export function revealMapRegion(
   camera: MapCamera,
   region: { x: number; y: number; width: number; height: number },
@@ -85,27 +85,23 @@ export function revealMapRegion(
     (viewport.width - 1) / 2,
     (viewport.height - 1) / 2,
   );
-  const scale = clampMapScale(
-    Math.min(
-      camera.scale,
-      (viewport.width - margin * 2) / region.width,
-      (viewport.height - margin * 2) / region.height,
-    ),
-  );
-  const next =
-    scale === camera.scale
-      ? { ...camera }
-      : zoomMap(camera, scale / camera.scale, {
-          x: camera.x + (region.x + region.width / 2) * camera.scale,
-          y: camera.y + (region.y + region.height / 2) * camera.scale,
-        });
-  const left = next.x + region.x * scale;
-  const top = next.y + region.y * scale;
-  next.x +=
-    Math.max(0, margin - left) -
-    Math.max(0, left + region.width * scale - viewport.width + margin);
-  next.y +=
-    Math.max(0, margin - top) -
-    Math.max(0, top + region.height * scale - viewport.height + margin);
-  return next;
+  const revealAxis = (
+    offset: number,
+    start: number,
+    size: number,
+    space: number,
+  ) => {
+    const leading = offset + start * camera.scale;
+    const extent = size * camera.scale;
+    if (extent > space - margin * 2) return margin - start * camera.scale;
+    if (leading < margin) return offset + margin - leading;
+    if (leading + extent > space - margin)
+      return offset + space - margin - leading - extent;
+    return offset;
+  };
+  return {
+    x: revealAxis(camera.x, region.x, region.width, viewport.width),
+    y: revealAxis(camera.y, region.y, region.height, viewport.height),
+    scale: camera.scale,
+  };
 }

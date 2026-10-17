@@ -1,4 +1,5 @@
 import { layoutMindMap, renderMindMapSvg } from './mindmap';
+import { appearancePalette } from './theme';
 import type { Appearance, MindMapNode } from './types';
 
 export function safeFilename(input: string): string {
@@ -68,6 +69,9 @@ export async function downloadMapPng(
     canvas.height = Math.ceil(layout.height * scale);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('图片导出失败，请下载 SVG 格式。');
+    // Keep rasterized SVG edges opaque even at fractional export scales.
+    context.fillStyle = appearancePalette(appearance).background;
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(

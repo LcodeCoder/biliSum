@@ -669,6 +669,247 @@ test('hostile model HTML cannot execute scripts, load remote resources, or attac
     );
   }));
 
+test('math notes render cached and standard formulas while preserving code, prices and original Markdown', async () => {
+  for (const width of [280, 720]) {
+    await scenario(
+      async (page) => {
+        await generate(page);
+        const rendered = page.locator('.markdown-body');
+        await rendered.locator('.bilisum-math').first().waitFor();
+        assert.equal(await rendered.locator('.bilisum-math').count(), 15);
+        assert.equal(await rendered.locator('.katex').count(), 15);
+        assert.equal(await rendered.locator('math').count(), 15);
+        for (const appearance of appearances) {
+          await page
+            .getByRole('button', { name: appearance.label, exact: true })
+            .click();
+          await page.waitForTimeout(250);
+          await page.evaluate(() => document.fonts.ready);
+          const metrics = await rendered.evaluate((element) => ({
+            color: getComputedStyle(element).color,
+            formulas: [...element.querySelectorAll('.katex')].map((math) => ({
+              color: getComputedStyle(math).color,
+              font: getComputedStyle(math).fontFamily,
+            })),
+            fonts: [...document.fonts]
+              .filter((font) => font.status === 'loaded')
+              .map((font) => font.family),
+            wide: [...element.querySelectorAll('.bilisum-math-display')].map(
+              (math) => ({
+                client: math.clientWidth,
+                scroll: math.scrollWidth,
+                overflow: getComputedStyle(math).overflowX,
+              }),
+            ),
+            width: element.clientWidth,
+            scroll: element.scrollWidth,
+          }));
+          assert.equal(metrics.color, rgb(appearance.text));
+          assert.ok(
+            metrics.formulas.every((math) => math.color === metrics.color),
+          );
+          assert.ok(
+            metrics.formulas.every((math) => math.font.includes('KaTeX_Main')),
+          );
+          for (const font of ['KaTeX_Main', 'KaTeX_Math', 'KaTeX_AMS'])
+            assert.ok(metrics.fonts.includes(font), `${font} loads locally`);
+          assert.ok(
+            metrics.scroll <= metrics.width + 1,
+            'formula overflow stays local',
+          );
+          assert.ok(metrics.wide.every((math) => math.overflow === 'auto'));
+          if (width === 280)
+            assert.ok(
+              metrics.wide.some((math) => math.scroll > math.client + 40),
+            );
+        }
+        const display = rendered.locator('.bilisum-math-display').last();
+        if (width === 280) {
+          await display.focus();
+          await display.press('ArrowRight');
+          await page.waitForFunction(() =>
+            [...document.querySelectorAll('.bilisum-math-display')].some(
+              (math) => math.scrollLeft > 0,
+            ),
+          );
+        }
+        const visible = await rendered.innerText();
+        assert.ok(visible.includes('价格 $5 和 $10'));
+        assert.ok(visible.includes('(这是补充说明)'));
+        assert.ok(visible.includes(String.raw`$\unknown{x}$`));
+        assert.ok(
+          visible.includes(
+            String.raw`$\href{https://math-hostile.example/}{不能创建链接}$`,
+          ),
+        );
+        assert.equal(
+          await rendered.locator('code').first().innerText(),
+          '$x^2$',
+        );
+        assert.equal(
+          await rendered.locator('pre code').innerText(),
+          String.raw`\(X\in\mathbb{R}\)` + '\n',
+        );
+        assert.equal(
+          await rendered
+            .locator(
+              'img, script, iframe, link, [onclick], [src], a[href^="javascript:"], .katex-error',
+            )
+            .count(),
+          0,
+        );
+        assert.equal(await page.evaluate(() => window.__mathXss), undefined);
+        const fake = rendered.getByText('模型伪造样式', { exact: true });
+        assert.equal(await fake.getAttribute('class'), null);
+        assert.equal(await fake.getAttribute('style'), null);
+
+        await page
+          .getByRole('button', { name: '切换 Markdown 源码', exact: true })
+          .click();
+        const raw = await page.locator('.markdown-source').innerText();
+        for (const formula of [
+          String.raw`(X\in\mathbb{R})`,
+          String.raw`\(\forall x\in\mathbb{R},\;x^2\ge0\)`,
+          '$$',
+          String.raw`\[\lim`,
+        ])
+          assert.ok(raw.includes(formula), formula);
+        const downloadEvent = page.waitForEvent('download');
+        await page
+          .getByRole('button', { name: '下载 Markdown 总结', exact: true })
+          .click();
+        const text = await readFile(await (await downloadEvent).path(), 'utf8');
+        assert.ok(text.includes(raw.trim()));
+        assert.ok(!text.includes('bilisum-math'));
+        await page.evaluate(() => {
+          Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: {
+              writeText: async (text) => {
+                window.__copiedMarkdown = text;
+              },
+            },
+          });
+        });
+        await page
+          .getByRole('button', { name: '复制 Markdown 总结', exact: true })
+          .click();
+        assert.ok(
+          (await page.evaluate(() => window.__copiedMarkdown)).includes(
+            raw.trim(),
+          ),
+        );
+        await page.reload();
+        await ready(page);
+        await page
+          .getByRole('tab', { name: 'Markdown 总结页面', exact: true })
+          .click();
+        assert.equal(
+          await page.locator('.markdown-body .bilisum-math').count(),
+          15,
+        );
+        assert.equal(
+          await page.evaluate(() => window.__biliSumFixture.stats.ai),
+          0,
+          'cached LaTeX rerenders without an AI request',
+        );
+      },
+      '&summary=math',
+      { width, height: 1000 },
+    );
+  }
+});
+
+test('math HTML downloads render offline with embedded fonts, safe markup and locally scrollable formulas', async () => {
+  await scenario(
+    async (page, context) => {
+      await generateHtml(page);
+      const frame = reportFrame(page);
+      assert.equal(await frame.locator('.bilisum-math').count(), 15);
+      for (const appearance of appearances) {
+        await page
+          .getByRole('button', { name: appearance.label, exact: true })
+          .click();
+        await waitReportAttribute(page, 'data-appearance', appearance.value);
+        assert.equal(await reportFrame(page).locator('math').count(), 15);
+        await assertReportFits(page);
+      }
+      const { download, text } = await downloadHtml(page);
+      assert.ok(text.includes('data:font/woff2;base64,'));
+      assert.ok(text.includes('KaTeX 0.19.0'));
+      assert.ok(!text.includes('BILISUMMATH'));
+      assert.match(
+        await reportFrame(page)
+          .locator('meta[http-equiv="Content-Security-Policy"]')
+          .getAttribute('content'),
+        /font-src data:/,
+      );
+      const directory = await mkdtemp(join(tmpdir(), 'bilisum-math-offline-'));
+      const file = join(directory, 'math.html');
+      await download.saveAs(file);
+      const offline = await context.newPage();
+      const requests = [],
+        errors = [];
+      offline.on('request', (request) => {
+        if (!request.url().startsWith('file:')) requests.push(request.url());
+      });
+      offline.on('pageerror', (error) => errors.push(error.message));
+      await context.setOffline(true);
+      try {
+        await offline.goto(pathToFileURL(file).href);
+        await offline.locator('.bilisum-math').first().waitFor();
+        await offline.evaluate(() => document.fonts.ready);
+        assert.equal(await offline.locator('math').count(), 15);
+        assert.equal(
+          await offline
+            .locator(
+              'body script, body img, body iframe, body style, [src], [srcdoc], [onclick], [onerror], [ping], a[href^="javascript:"], .katex-error',
+            )
+            .count(),
+          0,
+        );
+        const metrics = await offline.evaluate(() => ({
+          fonts: [...document.fonts]
+            .filter((font) => font.status === 'loaded')
+            .map((font) => font.family),
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+          wide: [...document.querySelectorAll('.bilisum-math-display')].map(
+            (math) => ({
+              client: math.clientWidth,
+              scroll: math.scrollWidth,
+              overflow: getComputedStyle(math).overflowX,
+            }),
+          ),
+          text: document.body.innerText,
+        }));
+        for (const font of ['KaTeX_Main', 'KaTeX_Math', 'KaTeX_AMS'])
+          assert.ok(metrics.fonts.includes(font), `${font} reads offline`);
+        assert.equal(metrics.overflow, false);
+        assert.ok(
+          metrics.wide.some(
+            (math) =>
+              math.scroll > math.client + 40 && math.overflow === 'auto',
+          ),
+        );
+        assert.ok(metrics.text.includes('价格 $5 和 $10'));
+        assert.ok(metrics.text.includes('(这是补充说明)'));
+        assert.equal(
+          await offline.locator('pre code').innerText(),
+          String.raw`\(X\in\mathbb{R}\)` + '\n',
+        );
+        assert.deepEqual(requests, []);
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.setOffline(false);
+        await offline.close();
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    '&summary=math&htmlTree=none',
+    { width: 280, height: 1000 },
+  );
+});
+
 test('all appearances fit narrow headers, persist and match Markdown, map and downloaded HTML without AI calls', async () => {
   for (const width of [280, 720]) {
     await scenario(
@@ -947,6 +1188,13 @@ test('startup settings load disables both settings entry points until saved conf
   }
 });
 
+const settleMap = (page) =>
+  page.locator('.map-drawing').evaluate(async (element) => {
+    getComputedStyle(element).transform;
+    await Promise.allSettled(
+      element.getAnimations().map((animation) => animation.finished),
+    );
+  });
 const generateMap = async (page) => {
   await page.getByRole('button', { name: '生成思维导图', exact: true }).click();
   await page.locator('.map-viewport').waitFor();
@@ -954,6 +1202,7 @@ const generateMap = async (page) => {
     const transform = document.querySelector('.map-drawing')?.style.transform;
     return transform && transform !== 'translate(0px, 0px) scale(1)';
   });
+  await settleMap(page);
 };
 
 // Edge anchors identify the parent and child hit areas in both interactive
@@ -1095,6 +1344,7 @@ const mapCount = async (page, count) => {
     (count) => document.querySelectorAll('.map-node').length === count,
     count,
   );
+  await settleMap(page);
   assert.equal(await page.locator('.map-node').count(), count);
 };
 
@@ -1134,6 +1384,70 @@ test('narrow maps open at reading size and manual cameras survive panel resizing
     { width: 280, height: 900 },
   ));
 
+test('dense lecture maps retain reading size, rightward branches and stable expansion', async () => {
+  for (const width of [380, 1200]) {
+    await scenario(
+      async (page) => {
+        await generateMap(page);
+        assert.equal(await page.locator('.zoom-value').innerText(), '100%');
+        await page.getByLabel('显示层级').selectOption('6');
+        await mapCount(page, 83);
+        assert.equal(await page.locator('.zoom-value').innerText(), '100%');
+        const dimensions = await page
+          .locator('.map-drawing')
+          .evaluate((element) => ({
+            width: parseFloat(element.style.width),
+            height: parseFloat(element.style.height),
+            textSize: Math.min(
+              ...Array.from(element.querySelectorAll('.map-label'), (label) =>
+                parseFloat(getComputedStyle(label).fontSize),
+              ),
+            ),
+          }));
+        assert.ok(
+          Number.isFinite(dimensions.width) &&
+            Number.isFinite(dimensions.height) &&
+            dimensions.width > 0 &&
+            dimensions.height > 0,
+          JSON.stringify(dimensions),
+        );
+        assert.ok(
+          dimensions.textSize >= 15,
+          'lecture details retain the reading font size',
+        );
+        assert.deepEqual(await page.evaluate(rightwardMapViolations), []);
+
+        await mapNode(page, '0').focus();
+        await settleMap(page);
+        await page.keyboard.press('Enter');
+        await mapCount(page, 1);
+        await page.keyboard.press('Enter');
+        await mapCount(page, 3);
+        await mapNode(page, '0.0').focus();
+        await settleMap(page);
+        await page.keyboard.press('Enter');
+        await mapCount(page, 7);
+        assert.equal(await page.locator('.zoom-value').innerText(), '100%');
+
+        await page
+          .getByRole('button', { name: '适应画布', exact: true })
+          .click();
+        await settleMap(page);
+        assert.ok(
+          parseInt(await page.locator('.zoom-value').innerText(), 10) < 100,
+        );
+        await page
+          .getByRole('button', { name: '原始大小阅读', exact: true })
+          .click();
+        await settleMap(page);
+        assert.equal(await page.locator('.zoom-value').innerText(), '100%');
+      },
+      '&map=dense',
+      { width, height: 1000 },
+    );
+  }
+});
+
 test('parent clicks reveal only the next layer, keep siblings independent and reset with depth presets', async () =>
   scenario(
     async (page) => {
@@ -1150,8 +1464,16 @@ test('parent clicks reveal only the next layer, keep siblings independent and re
         'false',
       );
       assert.equal(await mapNode(page, '0.0.0.0').count(), 0);
+      const scaleBeforeExpansion = await page
+        .locator('.zoom-value')
+        .innerText();
       await mapNode(page, '0.0.0').click();
       await mapCount(page, 14);
+      assert.equal(
+        await page.locator('.zoom-value').innerText(),
+        scaleBeforeExpansion,
+        'revealing children preserves the chosen reading size',
+      );
       assert.equal(
         await mapNode(page, '0.0.0.0').getAttribute('role'),
         null,
@@ -1163,9 +1485,7 @@ test('parent clicks reveal only the next layer, keep siblings independent and re
             .querySelector('.map-viewport')
             .getBoundingClientRect();
           return Array.from(
-            document.querySelectorAll(
-              '[data-map-path="0.0.0"], [data-map-path^="0.0.0."]',
-            ),
+            document.querySelectorAll('[data-map-path="0.0.0"]'),
           ).every((node) => {
             const box = node.getBoundingClientRect();
             return (
@@ -1176,8 +1496,10 @@ test('parent clicks reveal only the next layer, keep siblings independent and re
             );
           });
         }),
-        'the clicked node and its newly revealed children remain visible',
+        'the expanded parent remains visible at the chosen reading size',
       );
+      await mapNode(page, '0.0.0.0').focus();
+      await settleMap(page);
       await mapNode(page, '0.0.0.0').click();
       await mapCount(page, 14);
       const camera = await page.locator('.map-drawing').getAttribute('style');
@@ -1202,6 +1524,7 @@ test('parent clicks reveal only the next layer, keep siblings independent and re
         'duplicate point titles do not share state',
       );
       await mapNode(page, '0.0').focus();
+      await settleMap(page);
       await page.keyboard.press('Enter');
       await mapCount(page, 11);
       assert.equal(
@@ -1250,6 +1573,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
     async (page) => {
       await generateMap(page);
       await mapNode(page, '0.0').focus();
+      await settleMap(page);
       const before = await page.locator('.map-drawing').getAttribute('style');
       const box = await mapNode(page, '0.0').boundingBox();
       const x = box.x + box.width / 2,
@@ -1270,6 +1594,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
         'returning a drag to its start still does not count as a click',
       );
       await mapNode(page, '0.0').focus();
+      await settleMap(page);
       await page.keyboard.press('Enter');
       await mapCount(page, 11);
       assert.equal(
@@ -1279,6 +1604,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
         '0.0',
       );
       await mapNode(page, '0.5').focus();
+      await settleMap(page);
       await page.waitForFunction(() => {
         const viewport = document.querySelector('.map-viewport');
         const bounds = viewport.getBoundingClientRect();
@@ -1293,6 +1619,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
         );
       });
       await mapNode(page, '0.0').focus();
+      await settleMap(page);
       await page.keyboard.press('Space');
       await mapCount(page, 7);
       assert.equal(
@@ -1318,6 +1645,7 @@ test('dragging a parent never toggles it and keyboard focus survives SVG replace
       await page.getByLabel('显示层级').selectOption('6');
       await mapCount(page, 103);
       await mapNode(page, '0').focus();
+      await settleMap(page);
       await page.keyboard.press('Enter');
       await mapCount(page, 1);
       await page.keyboard.press('Enter');
@@ -1336,6 +1664,7 @@ test('touch taps expand once and cancelled touches leave the tree unchanged', as
     async (page, context) => {
       await generateMap(page);
       await page.getByRole('button', { name: '适应画布', exact: true }).click();
+      await settleMap(page);
       let box = await mapNode(page, '0.0').boundingBox();
       const session = await context.newCDPSession(page);
       await session.send('Input.dispatchTouchEvent', {
@@ -1351,8 +1680,11 @@ test('touch taps expand once and cancelled touches leave the tree unchanged', as
         await page.locator('.map-viewport').getAttribute('class'),
         'map-viewport',
       );
+      await settleMap(page);
+      box = await mapNode(page, '0.0').boundingBox();
       await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
       await mapCount(page, 11);
+      await settleMap(page);
       box = await mapNode(page, '0.0').boundingBox();
       await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
       await mapCount(page, 7);

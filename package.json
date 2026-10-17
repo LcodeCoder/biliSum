@@ -1,13 +1,13 @@
 {
   "name": "bilisum",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "type": "module",
   "description": "Bilibili AI side panel: mind maps, Markdown/HTML summaries and subtitles",
   "scripts": {
-    "dev": "npm run prepare:speech && wxt",
-    "build": "npm run prepare:speech && wxt build && node scripts/package.mjs",
-    "zip": "npm run prepare:speech && wxt zip && node scripts/package.mjs --zip",
+    "dev": "npm run prepare:speech && npm run prepare:math && wxt",
+    "build": "npm run prepare:speech && npm run prepare:math && wxt build && node scripts/package.mjs",
+    "zip": "npm run prepare:speech && npm run prepare:math && wxt zip && node scripts/package.mjs --zip",
     "check": "wxt prepare && svelte-check --tsconfig ./tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
     "postinstall": "wxt prepare",
@@ -16,7 +16,8 @@
     "test:subtitles": "node --test tests/player-subtitles.mjs",
     "test:ui": "npm run build && node --test tests/ui.mjs",
     "prepare:speech": "node scripts/vendor-speech-runtime.mjs",
-    "test:speech:smoke": "npm run build && node scripts/test-speech-smoke.mjs"
+    "test:speech:smoke": "npm run build && node scripts/test-speech-smoke.mjs",
+    "prepare:math": "node scripts/vendor-math.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
@@ -24,6 +25,7 @@
     "@noble/hashes": "2.0.1",
     "bits-ui": "2.19.5",
     "dompurify": "^3.2.7",
+    "katex": "0.19.0",
     "marked": "^16.4.1",
     "mediabunny": "1.61.4",
     "svelte": "5.57.2"

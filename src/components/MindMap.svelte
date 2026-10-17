@@ -49,6 +49,7 @@
   let viewportSize = $state({ width: 0, height: 0 });
   let camera = $state<MapCamera>({ x: 0, y: 0, scale: 1 });
   let moving = $state(false);
+  let smoothCamera = $state(false);
   let cameraMode: 'read' | 'fit' | 'manual' = 'read';
   const continuesRight = $derived(
     viewportSize.width > 0 &&
@@ -75,9 +76,26 @@
     return element && viewport?.contains(element) ? element : null;
   }
 
+  function stopCameraTransition() {
+    const drawing = viewport?.querySelector('.map-drawing');
+    if (
+      smoothCamera &&
+      drawing
+        ?.getAnimations()
+        .some((animation) => animation.playState === 'running')
+    ) {
+      const transform = new DOMMatrixReadOnly(
+        getComputedStyle(drawing).transform,
+      );
+      camera = { x: transform.e, y: transform.f, scale: transform.a };
+    }
+    smoothCamera = false;
+  }
+
   function toggleNode(path: string) {
     const box = layout.nodes.find((node) => node.path === path);
     if (!box?.childCount) return;
+    stopCameraTransition();
     pendingAnchor = {
       path,
       x: camera.x + (box.x + box.width / 2) * camera.scale,
@@ -91,11 +109,13 @@
           paths.delete(candidate);
     } else paths.add(path);
     cameraMode = 'manual';
+    smoothCamera = false;
     customExpansion = { basis: initialExpansion, paths };
   }
 
   function fit() {
     if (!viewport || !viewport.clientWidth || !viewport.clientHeight) return;
+    smoothCamera = true;
     camera = fitMap(layout, {
       width: viewport.clientWidth,
       height: viewport.clientHeight,
@@ -105,6 +125,7 @@
 
   function initialView() {
     if (!viewport || !viewport.clientWidth || !viewport.clientHeight) return;
+    smoothCamera = false;
     camera = readableMap(layout, layout.nodes[0]!, {
       width: viewport.clientWidth,
       height: viewport.clientHeight,
@@ -114,6 +135,7 @@
 
   function readSize() {
     if (!viewport) return;
+    smoothCamera = true;
     const root = layout.nodes[0]!;
     camera = {
       x: viewport.clientWidth / 2 - root.x - root.width / 2,
@@ -125,6 +147,7 @@
 
   function zoom(factor: number, anchor?: { x: number; y: number }) {
     if (!viewport) return;
+    stopCameraTransition();
     cameraMode = 'manual';
     camera = zoomMap(
       camera,
@@ -155,9 +178,9 @@
 
   function start(event: PointerEvent) {
     if (event.button !== 0 || !event.isPrimary || !viewport || drag) return;
+    stopCameraTransition();
     event.preventDefault();
     const node = nodeElement(event.target);
-    (node ?? viewport).focus({ preventScroll: true });
     drag = {
       id: event.pointerId,
       x: event.clientX,
@@ -166,6 +189,7 @@
       moved: false,
       path: node?.dataset.mapPath,
     };
+    (node ?? viewport).focus({ preventScroll: true });
     viewport.setPointerCapture(event.pointerId);
   }
 
@@ -176,6 +200,7 @@
     if (Math.hypot(dx, dy) > 6) drag.moved = true;
     if (!drag.moved) return;
     moving = true;
+    smoothCamera = false;
     cameraMode = 'manual';
     camera = panMap(drag.camera, dx, dy);
   }
@@ -212,6 +237,7 @@
     // Browser focus scrolling must not compete with the map camera.
     viewport.scrollLeft = 0;
     viewport.scrollTop = 0;
+    if (drag) return;
     const path = nodeElement(event.target)?.dataset.mapPath;
     const box = layout.nodes.find((node) => node.path === path);
     if (!box) return;
@@ -225,6 +251,7 @@
       next.scale !== camera.scale
     ) {
       cameraMode = 'manual';
+      smoothCamera = true;
       camera = next;
     }
   }
@@ -247,6 +274,7 @@
     const movement = direction[event.key];
     if (movement) {
       event.preventDefault();
+      stopCameraTransition();
       cameraMode = 'manual';
       camera = panMap(camera, movement[0], movement[1]);
     } else if (event.key === '+' || event.key === '=') {
@@ -283,6 +311,7 @@
         previousBasis === basis &&
         previousMode === currentMode
       ) {
+        smoothCamera = false;
         camera = {
           scale: camera.scale,
           x: anchor.x - (box.x + box.width / 2) * camera.scale,
@@ -296,31 +325,44 @@
         ];
         const x = Math.min(...group.map((node) => node.x));
         const y = Math.min(...group.map((node) => node.y));
-        camera = revealMapRegion(
+        const region = {
+          x,
+          y,
+          width: Math.max(...group.map((node) => node.x + node.width)) - x,
+          height: Math.max(...group.map((node) => node.y + node.height)) - y,
+        };
+        const groupFits =
+          region.width * camera.scale <= element.clientWidth - 32 &&
+          region.height * camera.scale <= element.clientHeight - 32;
+        const revealedCamera = revealMapRegion(
           camera,
-          {
-            x,
-            y,
-            width: Math.max(...group.map((node) => node.x + node.width)) - x,
-            height: Math.max(...group.map((node) => node.y + node.height)) - y,
-          },
+          groupFits ? region : box,
           { width: element.clientWidth, height: element.clientHeight },
         );
         // Replacing the SVG must not lose the keyboard user's node focus.
         void tick().then(() => {
-          if (initialExpansion === basis && viewport === element)
+          if (
+            initialExpansion === basis &&
+            viewport === element &&
+            layout === currentLayout
+          ) {
+            // Commit the reflow with the parent anchored before panning.
+            element.querySelector('.map-drawing')?.getBoundingClientRect();
+            smoothCamera = true;
+            camera = revealedCamera;
             element
               .querySelector<SVGElement>(`[data-map-path="${box.path}"]`)
               ?.focus({ preventScroll: true });
+          }
         });
       } else if (previousBasis === basis && previousMode === currentMode) {
         // Font metrics can settle after a cached map first appears.
         if (cameraMode === 'fit') frame = requestAnimationFrame(fit);
         else if (cameraMode === 'read')
-          frame = requestAnimationFrame(initialView);
+          frame = requestAnimationFrame(() => initialView());
       } else {
         cameraMode = 'read';
-        frame = requestAnimationFrame(initialView);
+        frame = requestAnimationFrame(() => initialView());
       }
       previousBasis = basis;
       previousMode = currentMode;
@@ -340,6 +382,7 @@
       };
       if (cameraMode === 'fit') fit();
       else if (cameraMode === 'read') initialView();
+      smoothCamera = false;
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -383,6 +426,7 @@
   >
     <div
       class="map-drawing"
+      class:repositioning={smoothCamera}
       style:width={layout.width + 'px'}
       style:height={layout.height + 'px'}
       style:transform={'translate(' +

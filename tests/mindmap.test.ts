@@ -127,6 +127,233 @@ test('default layout expands every branch rightward without losing notes or over
   }
 });
 
+test('a full lecture map gives long Chinese explanations room to read', () => {
+  const tree = validateMindMap({
+    title: '基本逻辑与常用思路',
+    children: [
+      {
+        title: '常见命题及其形式',
+        children: [
+          {
+            title: '蕴含命题',
+            children: [
+              { title: '形式：A推出B，读作如果A成立，那么B也成立' },
+              { title: '否定：A成立且B不成立，不能只把结论反过来' },
+              {
+                title:
+                  '例：如果一个实数大于零，那么它的平方也大于零，反过来并不总是成立',
+              },
+              { title: '逆否命题：B不成立则A也不成立，与原命题逻辑等价' },
+              {
+                title: '判断蕴含是否为真时，只需要排除前提为真而结论为假的情形',
+              },
+            ],
+          },
+          {
+            title: '多元命题',
+            children: [
+              {
+                title: '多个任给或存在混搭，必须分清变量的先后顺序与依赖关系',
+              },
+              {
+                title:
+                  '数列极限的定义：任给正数ε，总存在正整数N，序号大于N时误差小于ε',
+              },
+              {
+                title:
+                  '极限不存在的否定，需要保留任给N后还可以找到反例这一顺序',
+              },
+              {
+                title: '可先完成构造草案，再根据条件逐项检查推理是否合法',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        title: '常规证明思路与典型反例',
+        children: [
+          {
+            title: '分情况讨论与反例',
+            children: [
+              {
+                title: '观察条件是否有统一规律，再据此选择合适的分类方式',
+              },
+              {
+                title:
+                  '命题错误时不必证明所有情况，只要构造一个满足前提且违背结论的反例即可否定',
+              },
+              {
+                title:
+                  '举基础讲义中的例子时，先核对原题条件，避免反例本身不满足讨论范围',
+              },
+            ],
+          },
+          {
+            title: '综合运用',
+            children: [
+              {
+                title:
+                  '从条件A往B推，同时从结论C往前寻找充分条件，尝试将两条推理连接起来',
+              },
+              {
+                title:
+                  '若B与C互为充要条件即可直接衔接；若只是必要条件，还要补足反向证明',
+              },
+              {
+                title:
+                  '为防止循环论证，需要清楚标记每一步是在分析解题还是正式书写证明',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const layout = layoutMindMap(tree);
+  const explanations = layout.nodes.filter((box) => box.depth === 3);
+  assert.equal(explanations.length, 15);
+  assert.ok(
+    explanations.every((box) => box.lines.length <= 2),
+    'lecture sentences remain on one or two readable lines',
+  );
+  assert.ok(
+    explanations.filter((box) => box.width >= 360).length >= 10,
+    'long explanations spread across the canvas',
+  );
+  const short = layout.nodes.find((box) => box.title === '蕴含命题')!;
+  assert.ok(short.width < 120, 'short labels retain their natural width');
+  for (const { from, to } of layout.edges) {
+    const gap = to.x - (from.x + from.width);
+    assert.ok(gap >= (to.depth === 1 ? 120 : 80));
+  }
+  const svg = renderMindMapLayout(layout, tree.title);
+  assert.ok(svg.includes('class="map-label" font-size="15"'));
+  assert.equal((svg.match(/<g>/g) || []).length, layout.nodes.length);
+});
+
+test('taller visible subtrees spread horizontally without shrinking or misaligning siblings', () => {
+  const descriptions = [
+    '判断蕴含是否为真时，只需要排除前提为真而结论为假的情形',
+    '数列极限的定义：任给正数ε，总存在正整数N，序号大于N时误差小于ε',
+    '原命题与逆否命题彼此等价，求解时可以选择更容易证明的推理方向',
+    '从条件往结论逐步推理，并清楚标明每一步所依据的定义、定理和条件',
+    '若命题不成立，只要构造一个满足前提且违背结论的反例，就能否定原命题',
+    '从结论往前寻找充分条件，再回到已知条件检查两条推理是否可以衔接',
+  ];
+  let previous = { width: 0, height: 0 };
+  for (const [branches, topics, details] of [
+    [2, 2, 3],
+    [3, 3, 4],
+    [3, 5, 6],
+  ] as const) {
+    const tree = validateMindMap({
+      title: '基本逻辑与常用思路',
+      children: Array.from({ length: branches }, (_, branch) => ({
+        title: [
+          '常见命题及其形式',
+          '常规证明思路与典型反例',
+          '条件转换与综合练习',
+        ][branch],
+        children: Array.from({ length: topics }, (_, topic) => ({
+          title: [
+            '蕴含命题与逆否',
+            '多元命题的量词顺序',
+            '从条件到结论的推理',
+            '分情况讨论与反例',
+            '充分条件与必要条件',
+          ][topic],
+          children: Array.from({ length: details }, (_, detail) => ({
+            title:
+              descriptions[(branch + topic + detail) % descriptions.length],
+          })),
+        })),
+      })),
+    });
+    const layout = layoutMindMap(tree);
+    assert.ok(layout.width > previous.width && layout.height > previous.height);
+    previous = layout;
+    const siblingColumns = new Map<string, number>();
+    for (const { from, to } of layout.edges) {
+      const column = siblingColumns.get(from.path);
+      if (column !== undefined) assert.equal(to.x, column);
+      siblingColumns.set(from.path, to.x);
+      const run = to.x - from.x - from.width;
+      assert.ok(
+        run >= (from.depth === 0 ? 140 : 100) &&
+          run <= (from.depth === 0 ? 440 : 340),
+        'extra horizontal spread stays within a usable range',
+      );
+    }
+    for (const [index, box] of layout.nodes.entries()) {
+      assert.ok(box.x >= 0 && box.y >= 0);
+      assert.ok(box.x + box.width <= layout.width);
+      assert.ok(box.y + box.height <= layout.height);
+      for (const other of layout.nodes.slice(index + 1))
+        assert.ok(
+          box.x + box.width <= other.x ||
+            other.x + other.width <= box.x ||
+            box.y + box.height <= other.y ||
+            other.y + other.height <= box.y,
+          'all explanation boxes remain separate',
+        );
+    }
+    const folded = layoutMindMap(tree, { maxDepth: 1 });
+    assert.ok(
+      folded.width < layout.width,
+      'collapsed descendants do not reserve their old horizontal spread',
+    );
+    const rootRun = (map: typeof layout) => {
+      const root = map.nodes[0]!;
+      return (
+        map.nodes.find((node) => node.depth === 1)!.x - root.x - root.width
+      );
+    };
+    assert.ok(
+      rootRun(folded) < rootRun(layout),
+      'folding brings the first topic column closer',
+    );
+    const leaf = layout.nodes.find((node) => node.depth === 3)!;
+    assert.equal(leaf.title, descriptions[0]);
+    assert.ok(leaf.width >= 360);
+    assert.ok(
+      renderMindMapLayout(layout, tree.title).includes('font-size="15"'),
+    );
+  }
+});
+
+test('adding visible siblings broadens their common column smoothly and levels off', () => {
+  let previous: { height: number; run: number } | undefined;
+  let previousIncrease = Infinity;
+  for (let count = 2; count <= 119; count++) {
+    const layout = layoutMindMap(
+      validateMindMap({
+        title: '命题与证明',
+        children: Array.from({ length: count }, (_, index) => ({
+          title: '第' + index + '个证明思路',
+        })),
+      }),
+    );
+    const root = layout.nodes[0]!;
+    const run = layout.nodes[1]!.x - root.x - root.width;
+    assert.ok(run >= 140 && run < 440);
+    if (previous) {
+      assert.ok(run > previous.run);
+      const increase = run - previous.run;
+      assert.ok(
+        increase < layout.height - previous.height,
+        'one extra row does not trigger a large horizontal jump',
+      );
+      assert.ok(
+        increase < previousIncrease,
+        'additional height has diminishing impact',
+      );
+      previousIncrease = increase;
+    }
+    previous = { height: layout.height, run };
+  }
+});
+
 test('depth limits expose folded counts without mutating the original result', () => {
   const tree = validateMindMap({
     title: '中心',
@@ -344,7 +571,10 @@ test('long wide Latin, Chinese and composed Unicode titles wrap without splittin
   ];
   const tree = validateMindMap({
     title: titles[0],
-    children: titles.slice(1).map((title) => ({ title })),
+    children: titles.slice(1).map((title) => ({
+      title,
+      children: [{ title: titles[2] }],
+    })),
   });
   const segments = new Intl.Segmenter('zh', { granularity: 'grapheme' });
   const layout = layoutMindMap(tree);
